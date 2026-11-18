@@ -1,0 +1,171 @@
+/*
+ * 레이아웃(l-)과 컴포넌트(c-) 스타일. 값은 tokens.css 변수만 쓴다.
+ * 레이아웃은 flex만 쓴다. Figma Auto Layout과 그대로 대응시키기 위해서다.
+ * 클래스 이름의 컴포넌트명은 Figma 컴포넌트 이름과 같다: Toolbar, Button, Panel, ToggleList,
+ * Tabs, ProgressPanel, StatList, PlanViewer, DropOverlay, Toast
+ */
+* { box-sizing: border-box; }
+[hidden] { display: none !important; }
+html, body { margin: 0; height: 100%; }
+body {
+  background: var(--color-bg-app);
+  color: var(--color-text-primary);
+  font-family: var(--font-family-base);
+  font-size: var(--font-size-md);
+  overflow: hidden;
+}
+
+/* ---------- 레이아웃 ---------- */
+.l-app { display: flex; flex-direction: column; height: 100vh; }
+.l-body { display: flex; flex: 1; min-height: 0; gap: var(--space-3); padding: var(--space-3); }
+.l-sidebar {
+  display: flex; flex-direction: column; gap: var(--space-3);
+  width: var(--size-sidebar-width); flex-shrink: 0; overflow-y: auto;
+}
+.l-stage {
+  display: flex; flex-direction: column; flex: 1; min-width: 0;
+  background: var(--color-bg-surface); border: 1px solid var(--color-border-default);
+  border-radius: var(--radius-md); box-shadow: var(--shadow-panel); overflow: hidden;
+}
+.l-stage__body { position: relative; flex: 1; min-height: 0; }
+.l-stage__view { position: absolute; inset: 0; }
+.l-stage__view[hidden] { display: none; }
+
+/* ---------- Toolbar ---------- */
+.c-toolbar {
+  display: flex; align-items: center; gap: var(--space-2);
+  height: var(--size-toolbar-height); padding: 0 var(--space-4);
+  background: var(--color-bg-surface); border-bottom: 1px solid var(--color-border-default);
+}
+.c-toolbar__title { font-size: var(--font-size-lg); font-weight: var(--font-weight-bold); }
+.c-toolbar__hint { color: var(--color-text-secondary); font-size: var(--font-size-sm); margin-left: var(--space-2); }
+.c-toolbar__spacer { flex: 1; }
+
+/* ---------- Button ---------- */
+.c-button {
+  display: inline-flex; align-items: center; justify-content: center; gap: var(--space-2);
+  height: 36px; padding: 0 var(--space-4);
+  border: 1px solid var(--color-border-strong); border-radius: var(--radius-sm);
+  background: var(--color-bg-surface); color: var(--color-text-primary);
+  font: inherit; font-size: var(--font-size-sm); cursor: pointer;
+}
+.c-button:hover { background: var(--color-bg-subtle); }
+.c-button:disabled { opacity: 0.5; cursor: default; }
+.c-button--primary {
+  background: var(--color-accent-default); border-color: var(--color-accent-default);
+  color: var(--color-text-inverse);
+}
+.c-button--primary:hover { background: var(--color-accent-hover); }
+.c-button--ghost { border-color: transparent; background: transparent; }
+.c-button--small { height: 30px; padding: 0 var(--space-3); }
+
+/* ---------- Panel ---------- */
+.c-panel {
+  display: flex; flex-direction: column; gap: var(--space-3); padding: var(--space-4);
+  background: var(--color-bg-surface); border: 1px solid var(--color-border-default);
+  border-radius: var(--radius-md); box-shadow: var(--shadow-panel);
+}
+.c-panel__title { margin: 0; font-size: var(--font-size-sm); font-weight: var(--font-weight-bold); }
+.c-panel__body { display: flex; flex-direction: column; gap: var(--space-2); }
+.c-panel__row { display: flex; gap: var(--space-2); flex-wrap: wrap; }
+.c-panel__empty { color: var(--color-text-secondary); font-size: var(--font-size-sm); }
+
+/* ---------- ToggleList ---------- */
+.c-toggle-list { display: flex; flex-direction: column; gap: var(--space-1); }
+.c-toggle {
+  display: flex; align-items: center; gap: var(--space-2);
+  padding: var(--space-1) var(--space-2); border-radius: var(--radius-sm); cursor: pointer;
+}
+.c-toggle:hover { background: var(--color-bg-subtle); }
+.c-toggle input { accent-color: var(--color-accent-default); width: 16px; height: 16px; margin: 0; }
+
+/* ---------- Tabs ---------- */
+.c-tabs {
+  display: flex; gap: var(--space-1); padding: var(--space-2) var(--space-3);
+  border-bottom: 1px solid var(--color-border-default);
+}
+.c-tabs__tab {
+  height: 32px; padding: 0 var(--space-4); border: 0; border-radius: var(--radius-sm);
+  background: transparent; color: var(--color-text-secondary); font: inherit; cursor: pointer;
+}
+.c-tabs__tab[aria-selected="true"] {
+  background: var(--color-accent-subtle); color: var(--color-accent-default);
+  font-weight: var(--font-weight-bold);
+}
+
+/* ---------- ProgressPanel ---------- */
+.c-progress { display: flex; flex-direction: column; gap: var(--space-2); }
+.c-progress__text { font-size: var(--font-size-sm); }
+.c-progress__text--error { color: var(--color-status-danger); }
+.c-progress__text--done { color: var(--color-status-success); }
+.c-progress__bar {
+  height: 8px; border-radius: var(--radius-sm); background: var(--color-bg-subtle); overflow: hidden;
+}
+.c-progress__fill {
+  height: 100%; width: 0; background: var(--color-accent-default); transition: width 0.3s ease;
+}
+.c-progress__bar--busy .c-progress__fill { width: 35%; animation: c-progress-slide 1.2s ease-in-out infinite; }
+@keyframes c-progress-slide { from { transform: translateX(-100%); } to { transform: translateX(300%); } }
+
+/* ---------- StatList ---------- */
+.c-stat-list { display: grid; grid-template-columns: 1fr 1fr; gap: var(--space-2); }
+.c-stat { display: flex; flex-direction: column; padding: var(--space-2) var(--space-3);
+  background: var(--color-bg-subtle); border-radius: var(--radius-sm); }
+.c-stat__label { color: var(--color-text-secondary); font-size: var(--font-size-xs); }
+.c-stat__value { font-size: var(--font-size-lg); font-weight: var(--font-weight-bold); }
+
+/* ---------- Viewer3D ---------- */
+.c-viewer { position: absolute; inset: 0; background: var(--color-bg-viewer); }
+.c-viewer canvas { display: block; width: 100%; height: 100%; outline: none; }
+.c-viewer__empty {
+  position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center;
+  justify-content: center; gap: var(--space-2); color: var(--color-text-secondary); pointer-events: none;
+}
+.c-viewer__empty strong { color: var(--color-text-primary); font-size: var(--font-size-xl); }
+.c-viewer__help {
+  position: absolute; left: var(--space-3); bottom: var(--space-3); padding: var(--space-1) var(--space-3);
+  border-radius: var(--radius-sm); background: var(--color-bg-surface); color: var(--color-text-secondary);
+  font-size: var(--font-size-xs); box-shadow: var(--shadow-panel);
+}
+
+/* ---------- PlanViewer ---------- */
+.c-plan-viewer { position: absolute; inset: 0; display: flex; flex-direction: column; }
+.c-plan-viewer__bar { display: flex; gap: var(--space-2); padding: var(--space-2) var(--space-3); flex-wrap: wrap; }
+.c-plan-viewer__canvas {
+  position: relative; flex: 1; min-height: 0; overflow: hidden; background: var(--color-bg-surface); cursor: grab;
+}
+.c-plan-viewer__canvas img {
+  position: absolute; left: 0; top: 0; transform-origin: 0 0; user-select: none; -webkit-user-drag: none;
+}
+.c-plan-viewer__chip {
+  height: 28px; padding: 0 var(--space-3); border: 1px solid var(--color-border-default);
+  border-radius: var(--radius-lg); background: var(--color-bg-surface); font: inherit;
+  font-size: var(--font-size-xs); cursor: pointer;
+}
+.c-plan-viewer__chip[aria-pressed="true"] {
+  border-color: var(--color-accent-default); color: var(--color-accent-default);
+  background: var(--color-accent-subtle);
+}
+
+/* ---------- DropOverlay ---------- */
+.c-drop-overlay {
+  position: fixed; inset: 0; z-index: 10; display: flex; align-items: center; justify-content: center;
+  background: var(--color-bg-overlay); pointer-events: none;
+}
+.c-drop-overlay[hidden] { display: none; }
+.c-drop-overlay__box {
+  display: flex; flex-direction: column; align-items: center; gap: var(--space-2);
+  padding: var(--space-6); border: 2px dashed var(--color-accent-default); border-radius: var(--radius-lg);
+  background: var(--color-bg-surface); box-shadow: var(--shadow-floating);
+}
+.c-drop-overlay__title { font-size: var(--font-size-xl); font-weight: var(--font-weight-bold); }
+.c-drop-overlay__sub { color: var(--color-text-secondary); font-size: var(--font-size-sm); }
+
+/* ---------- Toast ---------- */
+.c-toast {
+  position: fixed; right: var(--space-4); bottom: var(--space-4); z-index: 20; max-width: 420px;
+  padding: var(--space-3) var(--space-4); border-radius: var(--radius-md);
+  background: var(--color-text-primary); color: var(--color-text-inverse);
+  font-size: var(--font-size-sm); box-shadow: var(--shadow-floating);
+}
+.c-toast[hidden] { display: none; }

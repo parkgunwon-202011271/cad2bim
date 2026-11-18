@@ -4,45 +4,76 @@
 
 설계와 규칙은 [상세설계.md](상세설계.md), 시험 데이터는 [data/public/README.md](data/public/README.md)를 보세요.
 
-## 다른 컴퓨터에서 준비할 것
+## 다른 컴퓨터에서 설치
 
-저장소에 들어 있지 않아 따로 준비해야 하는 항목입니다.
-
-| 항목 | 필요한 때 | 없으면 |
-|---|---|---|
-| Python 3.11 이상과 패키지 | 항상 | 실행 불가 |
-| LibreDWG | DWG 입력 | DWG를 못 읽음. DXF는 가능 |
-| SketchUp C SDK | skp 출력 | skp만 빠지고 나머지는 출력 |
-| 렌더링 패키지 | 조감도 그림 | 조감도만 건너뜀 |
-| 실사화 환경 | 조감도 실사화 | 실사화만 건너뜀 |
-
-조감도와 실사화는 지금 꺼져 있습니다(`aerial_enabled`, `photo_enabled`). 앞 단계 품질을 먼저 올리기로 했기 때문이며, 평소 작업에는 위 세 항목만 있으면 됩니다.
-
-### 1. 기본 설치
+Windows 11과 Python 3.11 이상만 있으면 됩니다. 패키지 버전은 `requirements.txt`에 고정되어 있고, DWG를 읽는 LibreDWG는 `third_party/libredwg`에 함께 들어 있습니다.
 
 ```powershell
 git clone git@github.com:parkgunwon-202011271/cad2bim.git
-cd cad2bim\core
-pip install -e ".[dev]"
-python -m pytest -q
+cd cad2bim
+python -m venv .venv
+.venv\Scriptsctivate
+pip install -r requirements.txt
+python scriptserify.py     # 주민센터를 변환해 기준값과 비교. 마지막 줄이 "재현 성공"이면 끝
+python -m app                # 앱 실행
 ```
 
-SDK가 없으면 skp 테스트는 건너뜁니다.
+| 항목 | 저장소에 있나 | 없으면 |
+|---|---|---|
+| Python 패키지 | `requirements.txt`로 설치 | 실행 불가 |
+| LibreDWG 0.14.8829 | 있음 (`third_party/libredwg`) | — |
+| SketchUp C SDK | 없음 (재배포 금지, 선택 설치 1번) | skp만 빠지고 나머지는 출력 |
+| 렌더링 패키지 | 없음 (선택 설치 2번) | 조감도만 건너뜀 |
+| 실사화 환경 | 없음 (선택 설치 3번) | 실사화만 건너뜀 |
 
-### 2. LibreDWG
+조감도와 실사화는 지금 꺼져 있습니다(`aerial_enabled`, `photo_enabled`). 앞 단계 품질을 먼저 올리기로 했기 때문입니다.
 
-Windows용 LibreDWG를 받아 `C:\libredwg`에 풉니다. 다른 위치에 두려면 `dwg2dxf`를 PATH에 넣거나 환경 변수 `LIBREDWG_DWG2DXF`에 실행 파일 경로를 지정합니다.
+테스트: `cd core` 후 `python -m pytest -q`. SDK가 없으면 skp 테스트는 건너뜁니다. 지금 `test_slab_covers_the_floor_below_the_level` 1건이 부동소수점 비교(-199.99999999999972 ≠ -200.0)로 실패합니다. 앱과는 무관합니다.
 
 ODA File Converter는 비회원이면 비상업 용도만 허용되므로 쓰지 않습니다.
 
-### 3. SketchUp C SDK
+## 앱 (프로토타입)
+
+`python -m app`으로 창이 열립니다. DWG 폴더나 DWG·DXF 파일 여러 개를 창에 끌어다 놓으면 변환하고, 3D 모델을 360도로 돌려 볼 수 있습니다. 끌어다 놓기가 안 되면 "도면 폴더 열기"를 씁니다.
+
+- 3D: 드래그 회전, 휠 확대, 오른쪽 드래그 이동. 층·지붕·대지 표시를 켜고 끕니다.
+- 2D: 입력 도면을 그림으로 봅니다. 숫자만 8자리 이상인 글자(학번 등)는 그리지 않습니다.
+- 폴더를 놓으면 결과는 그 폴더의 `_cad2bim_out`에, 파일을 놓으면 `%LOCALAPPDATA%\cad2bim\jobs\`에 생깁니다.
+- 외부 통신이 없습니다. three.js 0.170.0(MIT)도 `app/web/vendor`에 들어 있습니다.
+
+### 화면 구조와 Figma 반영
+
+화면은 빌드 과정이 없는 HTML·CSS·JS입니다(`app/web`). Node는 필요 없습니다.
+
+| 파일 | 내용 | Figma에서 바꾸면 |
+|---|---|---|
+| `css/tokens.css` | 색·글꼴·간격·모서리. Figma Variables와 이름이 1:1 (`color/bg/surface` → `--color-bg-surface`) | 값만 고침 |
+| `css/app.css` | 레이아웃(flex만 사용 = Auto Layout)과 컴포넌트 모양 | 고침 |
+| `js/ui/components.js`, `js/ui/plan-viewer.js` | 컴포넌트(Button, Toolbar, Panel, ToggleList, Tabs, ProgressPanel, StatList, DropOverlay, Toast, PlanViewer). 이름이 Figma 컴포넌트와 같음 | 고침 |
+| `js/main.js` | 화면 조립과 동작 | 배치가 바뀔 때만 |
+| `js/viewer.js` | three.js 3D 뷰어 | 고치지 않음 |
+| `js/api.js` | Python 연결 창구 | 고치지 않음 |
+
+Python 없이 화면만 볼 때(디자인 작업용):
+
+```powershell
+cd app\web
+python -m http.server 8000
+# 브라우저에서 http://localhost:8000/?sample  (샘플 3D), ?sample&tab=2d (샘플 2D)
+```
+
+브라우저에서는 주민센터 샘플(`app/web/sample`, `python -m app.sample`로 다시 만듦)로 같은 흐름을 흉내 냅니다.
+
+## 선택 설치
+
+### 1. SketchUp C SDK
 
 Trimble 개발자 사이트에서 약관에 동의하고 받아 `C:\SDK_Win`에 풉니다. 다른 위치라면 환경 변수 `CAD2BIM_SKETCHUP_SDK`에 지정합니다.
 
 - SDK는 재배포가 금지되어 있어 저장소에 넣지 않습니다.
 - Trimble의 서면 승인 전에는 skp 출력을 외부 고객에게 제공하지 않습니다.
 
-### 4. 조감도 그림 (선택)
+### 2. 조감도 그림
 
 ```powershell
 pip install -e ".[render]"
@@ -50,7 +81,7 @@ pip install -e ".[render]"
 
 `config/defaults.yaml`에서 `aerial_enabled`를 `true`로 바꿉니다.
 
-### 5. 실사화 (선택)
+### 3. 실사화
 
 NVIDIA 그래픽 카드(메모리 16GB에서 확인)와 저장 공간 약 12GB가 필요합니다. 모든 계산은 PC 안에서 끝나고 실행 중 인터넷을 쓰지 않습니다.
 

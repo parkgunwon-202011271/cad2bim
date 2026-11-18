@@ -1,0 +1,70 @@
+{
+  "summary": {
+    "floors": [
+      {
+        "key": "F1",
+        "elevation_m": "0.0",
+        "align": "grid",
+        "match": "1.00",
+        "alternatives": "0",
+        "walls": "30",
+        "columns": "21",
+        "openings": "30",
+        "rooms": "14"
+      },
+      {
+        "key": "F2",
+        "elevation_m": "4.5",
+        "align": "reference",
+        "match": "-",
+        "alternatives": "1",
+        "walls": "28",
+        "columns": "29",
+        "openings": "29",
+        "rooms": "11"
+      },
+      {
+        "key": "F3",
+        "elevation_m": "9.0",
+        "align": "same_origin",
+        "match": "1.00",
+        "alternatives": "1",
+        "walls": "32",
+        "columns": "18",
+        "openings": "13",
+        "rooms": "6"
+      }
+    ],
+    "totals": {
+      "walls": "90",
+      "glazed_bands": "16",
+      "columns": "68",
+      "openings": "72",
+      "doors": "35",
+      "windows": "25",
+      "slabs": "3",
+      "stairs": "2",
+      "spaces": "31",
+      "rails": "20",
+      "roofs": "2",
+      "curtain_walls": "0",
+      "skipped_opening": "0",
+      "skipped_room": "0",
+      "skipped_zero_wall": "0"
+    }
+  },
+  "plans": [
+    {
+      "name": "주민센터 2층 평면도",
+      "file": "plans/01.png"
+    },
+    {
+      "name": "주민센터 3층 평면도",
+      "file": "plans/02.png"
+    },
+    {
+      "name": "주민자치센터_1층평면도_B안(최종)",
+      "file": "plans/03.png"
+    }
+  ]
+}

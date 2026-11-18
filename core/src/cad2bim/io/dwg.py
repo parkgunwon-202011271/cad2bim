@@ -1,6 +1,7 @@
 """DWG → DXF 변환 어댑터. DXF 입력이 표준 경로이고 DWG는 이 뒤에 숨긴다.
 
-- LibreDWG(GPL-3.0): 기본값. 별도 프로세스로 호출한다. 고객에게 함께 배포하려면 GPL 의무를 검토한다.
+- LibreDWG(GPL-3.0): 기본값. 별도 프로세스로 호출한다. 재현을 위해 고정 버전을 저장소의
+  third_party/libredwg에 함께 두고 가장 먼저 쓴다. 고객에게 함께 배포하려면 GPL 의무를 검토한다.
 - ODA File Converter: 비회원은 비상업 용도만 허용된다 (상세설계 9장). 사용자가 설치했을 때만 쓴다.
 
 두 변환기 모두 임시 폴더의 input.dwg로 호출한다. 큰 폴더를 훑지 않고, 파일명의 한글과
@@ -20,6 +21,8 @@ from ..errors import Cad2BimError, ConverterNotAvailableError
 
 _TIMEOUT_S = 600
 _DEFAULT_LIBREDWG_DIR = r"C:\libredwg"
+# 저장소에 함께 둔 고정 버전. PC마다 변환 결과가 같도록 설치본보다 먼저 쓴다.
+_BUNDLED_LIBREDWG = Path(__file__).resolve().parents[4] / "third_party" / "libredwg" / "dwg2dxf.exe"
 
 
 class DwgConverter(Protocol):
@@ -29,6 +32,8 @@ class DwgConverter(Protocol):
 
 
 def _installed_libredwg() -> str | None:
+    if _BUNDLED_LIBREDWG.is_file():
+        return str(_BUNDLED_LIBREDWG)
     pattern = os.path.join(_DEFAULT_LIBREDWG_DIR, "**", "dwg2dxf.exe")
     found = sorted(glob.glob(pattern, recursive=True))
     return found[0] if found else None
@@ -89,7 +94,7 @@ class OdaFileConverter(_TempFolderConverter):
 def find_converter() -> DwgConverter | None:
     """라이선스 제약이 적은 LibreDWG를 먼저 찾는다."""
     libredwg = (
-        os.environ.get("LIBREDWG_DWG2DXF") or shutil.which("dwg2dxf") or _installed_libredwg()
+        os.environ.get("LIBREDWG_DWG2DXF") or _installed_libredwg() or shutil.which("dwg2dxf")
     )
     if libredwg:
         return LibreDwgConverter(libredwg)
