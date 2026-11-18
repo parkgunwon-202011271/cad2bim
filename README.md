@@ -12,9 +12,9 @@ Windows 11과 Python 3.11 이상만 있으면 됩니다. 패키지 버전은 `re
 git clone git@github.com:parkgunwon-202011271/cad2bim.git
 cd cad2bim
 python -m venv .venv
-.venv\Scriptsctivate
+.venv\Scripts\activate
 pip install -r requirements.txt
-python scriptserify.py     # 주민센터를 변환해 기준값과 비교. 마지막 줄이 "재현 성공"이면 끝
+python scripts\verify.py     # 주민센터를 변환해 기준값과 비교. 마지막 줄이 "재현 성공"이면 끝
 python -m app                # 앱 실행
 ```
 
