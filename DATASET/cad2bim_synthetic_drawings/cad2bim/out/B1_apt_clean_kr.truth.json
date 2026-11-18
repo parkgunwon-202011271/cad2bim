@@ -1,0 +1,568 @@
+{
+  "file": "B1_apt_clean_kr.dxf",
+  "layout": "B",
+  "description": "가상 공동주택 단위세대 평면도",
+  "units": "mm",
+  "quirks": [],
+  "layer_classes": {
+    "가구": [
+      "furniture"
+    ],
+    "계단": [
+      "stair"
+    ],
+    "기둥": [
+      "column"
+    ],
+    "기둥해치": [
+      "column_hatch"
+    ],
+    "도곽": [
+      "frame"
+    ],
+    "면적": [
+      "room_area"
+    ],
+    "문": [
+      "door"
+    ],
+    "벽체-RC": [
+      "wall_rc"
+    ],
+    "벽체-조적": [
+      "wall_block"
+    ],
+    "벽체해치": [
+      "wall_hatch"
+    ],
+    "실명": [
+      "room_name"
+    ],
+    "위생기구": [
+      "fixture"
+    ],
+    "주기": [
+      "note"
+    ],
+    "중심선": [
+      "grid"
+    ],
+    "중심선-번호": [
+      "grid_tag"
+    ],
+    "창호": [
+      "window"
+    ],
+    "치수": [
+      "dim"
+    ]
+  },
+  "walls": [
+    {
+      "id": "W1",
+      "p1": [
+        0,
+        0
+      ],
+      "p2": [
+        10800,
+        0
+      ],
+      "thickness": 200,
+      "material": "RC"
+    },
+    {
+      "id": "W2",
+      "p1": [
+        10800,
+        0
+      ],
+      "p2": [
+        10800,
+        8400
+      ],
+      "thickness": 200,
+      "material": "RC"
+    },
+    {
+      "id": "W3",
+      "p1": [
+        10800,
+        8400
+      ],
+      "p2": [
+        0,
+        8400
+      ],
+      "thickness": 200,
+      "material": "RC"
+    },
+    {
+      "id": "W4",
+      "p1": [
+        0,
+        8400
+      ],
+      "p2": [
+        0,
+        0
+      ],
+      "thickness": 200,
+      "material": "RC"
+    },
+    {
+      "id": "W5",
+      "p1": [
+        3600,
+        0
+      ],
+      "p2": [
+        3600,
+        8400
+      ],
+      "thickness": 200,
+      "material": "RC"
+    },
+    {
+      "id": "W6",
+      "p1": [
+        7200,
+        0
+      ],
+      "p2": [
+        7200,
+        8400
+      ],
+      "thickness": 200,
+      "material": "RC"
+    },
+    {
+      "id": "W7",
+      "p1": [
+        0,
+        4800
+      ],
+      "p2": [
+        3600,
+        4800
+      ],
+      "thickness": 200,
+      "material": "RC"
+    },
+    {
+      "id": "W8",
+      "p1": [
+        7200,
+        6600
+      ],
+      "p2": [
+        10800,
+        6600
+      ],
+      "thickness": 100,
+      "material": "BLOCK"
+    },
+    {
+      "id": "W9",
+      "p1": [
+        9000,
+        6600
+      ],
+      "p2": [
+        9000,
+        8400
+      ],
+      "thickness": 100,
+      "material": "BLOCK"
+    },
+    {
+      "id": "W10",
+      "p1": [
+        5400,
+        6600
+      ],
+      "p2": [
+        5400,
+        8400
+      ],
+      "thickness": 100,
+      "material": "BLOCK"
+    },
+    {
+      "id": "W11",
+      "p1": [
+        5400,
+        6600
+      ],
+      "p2": [
+        7200,
+        6600
+      ],
+      "thickness": 100,
+      "material": "BLOCK"
+    }
+  ],
+  "columns": [],
+  "openings": [
+    {
+      "id": "D1",
+      "kind": "door",
+      "wall": "W5",
+      "center": [
+        3600,
+        4000
+      ],
+      "width": 900,
+      "hinge": [
+        3500,
+        3550
+      ],
+      "swing_dir": [
+        -1,
+        0
+      ]
+    },
+    {
+      "id": "D2",
+      "kind": "door",
+      "wall": "W5",
+      "center": [
+        3600,
+        5800
+      ],
+      "width": 900,
+      "hinge": [
+        3500,
+        6250
+      ],
+      "swing_dir": [
+        -1,
+        0
+      ]
+    },
+    {
+      "id": "D3",
+      "kind": "door",
+      "wall": "W6",
+      "center": [
+        7200,
+        4000
+      ],
+      "width": 900,
+      "hinge": [
+        7300,
+        3550
+      ],
+      "swing_dir": [
+        1,
+        0
+      ]
+    },
+    {
+      "id": "D4",
+      "kind": "door",
+      "wall": "W8",
+      "center": [
+        7700,
+        6600
+      ],
+      "width": 800,
+      "hinge": [
+        7300,
+        6650
+      ],
+      "swing_dir": [
+        0,
+        1
+      ]
+    },
+    {
+      "id": "D5",
+      "kind": "door",
+      "wall": "W8",
+      "center": [
+        9900,
+        6600
+      ],
+      "width": 800,
+      "hinge": [
+        10300,
+        6550
+      ],
+      "swing_dir": [
+        0,
+        -1
+      ]
+    },
+    {
+      "id": "D6",
+      "kind": "door",
+      "wall": "W3",
+      "center": [
+        6300,
+        8400
+      ],
+      "width": 1000,
+      "hinge": [
+        6800,
+        8500
+      ],
+      "swing_dir": [
+        0,
+        1
+      ]
+    },
+    {
+      "id": "D7",
+      "kind": "door",
+      "wall": "W11",
+      "center": [
+        6300,
+        6600
+      ],
+      "width": 900,
+      "hinge": [
+        5850,
+        6550
+      ],
+      "swing_dir": [
+        0,
+        -1
+      ]
+    },
+    {
+      "id": "WN1",
+      "kind": "window",
+      "wall": "W1",
+      "center": [
+        1800,
+        0
+      ],
+      "width": 2000
+    },
+    {
+      "id": "WN2",
+      "kind": "window",
+      "wall": "W1",
+      "center": [
+        5400,
+        0
+      ],
+      "width": 2800
+    },
+    {
+      "id": "WN3",
+      "kind": "window",
+      "wall": "W1",
+      "center": [
+        9000,
+        0
+      ],
+      "width": 2000
+    },
+    {
+      "id": "WN4",
+      "kind": "window",
+      "wall": "W3",
+      "center": [
+        1800,
+        8400
+      ],
+      "width": 1500
+    },
+    {
+      "id": "WN5",
+      "kind": "window",
+      "wall": "W3",
+      "center": [
+        4500,
+        8400
+      ],
+      "width": 1200
+    },
+    {
+      "id": "WN6",
+      "kind": "window",
+      "wall": "W3",
+      "center": [
+        8100,
+        8400
+      ],
+      "width": 600
+    },
+    {
+      "id": "WN7",
+      "kind": "window",
+      "wall": "W4",
+      "center": [
+        0,
+        6600
+      ],
+      "width": 1200
+    },
+    {
+      "id": "WN8",
+      "kind": "window",
+      "wall": "W2",
+      "center": [
+        10800,
+        2400
+      ],
+      "width": 1500
+    }
+  ],
+  "rooms": [
+    {
+      "name": "침실2",
+      "label_point": [
+        1800,
+        3000
+      ],
+      "region_id": 0,
+      "clear_area_m2": 15.64
+    },
+    {
+      "name": "침실3",
+      "label_point": [
+        1800,
+        6600
+      ],
+      "region_id": 1,
+      "clear_area_m2": 11.56
+    },
+    {
+      "name": "거실",
+      "label_point": [
+        5400,
+        2200
+      ],
+      "region_id": 2,
+      "clear_area_m2": 24.81,
+      "shares_region_with": [
+        "주방"
+      ]
+    },
+    {
+      "name": "주방",
+      "label_point": [
+        4900,
+        6250
+      ],
+      "region_id": 2,
+      "clear_area_m2": 24.81,
+      "shares_region_with": [
+        "거실"
+      ]
+    },
+    {
+      "name": "현관",
+      "label_point": [
+        6300,
+        7500
+      ],
+      "region_id": 3,
+      "clear_area_m2": 2.72
+    },
+    {
+      "name": "침실1",
+      "label_point": [
+        9000,
+        4400
+      ],
+      "region_id": 4,
+      "clear_area_m2": 21.93
+    },
+    {
+      "name": "욕실1",
+      "label_point": [
+        8550,
+        7250
+      ],
+      "region_id": 6,
+      "clear_area_m2": 2.72
+    },
+    {
+      "name": "드레스룸",
+      "label_point": [
+        9900,
+        7700
+      ],
+      "region_id": 5,
+      "clear_area_m2": 2.72
+    }
+  ],
+  "fixtures": [
+    {
+      "type": "BED_Q",
+      "insert": [
+        9000,
+        2200
+      ],
+      "rotation": 0
+    },
+    {
+      "type": "BED_S",
+      "insert": [
+        1000,
+        1400
+      ],
+      "rotation": 0
+    },
+    {
+      "type": "BED_S",
+      "insert": [
+        1200,
+        6600
+      ],
+      "rotation": 0
+    },
+    {
+      "type": "SOFA",
+      "insert": [
+        5400,
+        3900
+      ],
+      "rotation": 0
+    },
+    {
+      "type": "TABLE4",
+      "insert": [
+        5400,
+        5500
+      ],
+      "rotation": 0
+    },
+    {
+      "type": "COUNTER",
+      "insert": [
+        4000,
+        7200
+      ],
+      "rotation": 0
+    },
+    {
+      "type": "WC",
+      "insert": [
+        8650,
+        8150
+      ],
+      "rotation": 0
+    },
+    {
+      "type": "LAV",
+      "insert": [
+        7700,
+        8000
+      ],
+      "rotation": 0
+    }
+  ],
+  "counts": {
+    "walls": 11,
+    "columns": 0,
+    "doors": 7,
+    "windows": 8,
+    "rooms": 8,
+    "room_regions": 7
+  }
+}

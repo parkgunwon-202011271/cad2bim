@@ -1,0 +1,28 @@
+# 도면은 기본으로 커밋하지 않음. 합성 도면과 data/public만 예외.
+real_data/
+*.dwg
+*.dxf
+*.skp
+# 받은 압축 파일. 물류 보안 처리본이 섞일 수 있어 공개 데이터만 예외로 둔다
+*.zip
+*.7z
+*.rar
+!data/public/**/*.zip
+!DATASET/cad2bim_synthetic_drawings/**/*.dxf
+!data/public/**/*.dwg
+!data/public/**/*.dxf
+!data/public/**/*.skp
+
+# 변환 결과는 올리지 않는다
+_cad2bim_out/
+# 물류 도면과 출처가 불분명한 외부 도면은 저장소에 두지 않는다
+data/물류_B동/
+data/public/외부도면/
+
+# 산출물
+/out/
+
+__pycache__/
+*.egg-info/
+.pytest_cache/
+.venv/

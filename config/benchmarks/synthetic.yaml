@@ -1,0 +1,28 @@
+# 합성 도면 벤치마크. 경로는 이 파일 기준 상대 경로다.
+# 실제 도면은 저장소 밖에 별도 매니페스트를 두고 id를 익명으로 쓴다.
+name: synthetic
+root: ../../DATASET/cad2bim_synthetic_drawings/cad2bim/out
+floor_height: 3000
+
+drawings:
+  - {id: A1, dxf: A1_retail_clean_en.dxf, truth: A1_retail_clean_en.truth.json, split: dev, gated: true}
+  - {id: A2, dxf: A2_retail_messy.dxf, truth: A2_retail_messy.truth.json, split: dev, gated: false}
+  - {id: B1, dxf: B1_apt_clean_kr.dxf, truth: B1_apt_clean_kr.truth.json, split: dev, gated: true}
+  - {id: B2, dxf: B2_apt_partial_code.dxf, truth: B2_apt_partial_code.truth.json, split: dev, gated: true}
+
+# 마일스톤별 통과 기준. gated 도면 각각이 모두 만족해야 한다 (상세설계 8.1, 10장).
+gates:
+  m2:
+    walls.recall: 0.98
+    walls.precision: 0.98
+    walls.thickness_accuracy: 0.98
+    columns.f1: 1.0
+  m3:
+    walls.recall: 0.98
+    walls.precision: 0.98
+    walls.thickness_accuracy: 0.98
+    columns.f1: 1.0
+    openings.doors.f1: 1.0
+    openings.doors.direction_accuracy: 1.0
+    openings.windows.f1: 1.0
+    rooms.recall: 1.0

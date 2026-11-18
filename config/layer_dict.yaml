@@ -1,0 +1,44 @@
+# 레이어 이름 → 역할. 위에서부터 첫 일치를 쓴다. 대소문자 구분 없음.
+# 외부참조 접두사(파일$0$, 파일|)를 뗀 이름에 적용한다.
+# (?<![a-z0-9])...(?![a-z0-9]) 는 약어가 단어로 있을 때만 맞춘다. WINDOW의 WIN, CONTOUR의 CON 오인을 막는다.
+roles:
+  # C-, L-은 CAD 표준의 토목, 조경 머리글이다. 건물 요소가 아니다.
+  - {role: OTHER, pattern: "^(c|l)-"}
+  - {role: RAIL, pattern: "rail|parapet|파라펫|난간|roof$"}
+  - {role: OTHER, pattern: "(?<![a-z0-9])roof|parapet|파라펫|옥상|지붕|^defpoints$|ttlb|title|(?<![a-z0-9])form(?![a-z0-9])|도곽|표제|note|주기|border"}
+  - {role: HATCH, pattern: "patt|hatch|(?<![a-z0-9])hat(?![a-z0-9])|해치"}
+  - {role: DIM, pattern: "dim|치수"}
+  - {role: GRID, pattern: "grid|(?<![a-z0-9])cen(?![a-z0-9])|center|중심선|그리드"}
+  - {role: STAIR, pattern: "stair|strs|계단"}
+  - {role: FURNITURE, pattern: "furn|(?<![a-z0-9])fur(?![a-z0-9])|fixt|plumb|가구|위생|집기"}
+  - {role: COLUMN, pattern: "(?<![a-z0-9])cols?(?![a-z])|column|기둥"}
+  - {role: DOOR, pattern: "door|shut|dock|셔터|(?<![가-힣])문(?![가-힣])"}
+  - {role: WINDOW, pattern: "glaz|window|(?<![a-z0-9])win(?![a-z0-9])|창호|(?<![가-힣])창(?![가-힣])"}
+  - {role: ROOM_TEXT, pattern: "area|^text$|^txt$|room|실명|면적"}
+  - {role: WALL, pattern: "wall|(?<![a-z0-9])(con|conc|blk|block)(?![a-z0-9])|벽|조적|패널|판넬"}
+
+# 건물 밖 요소. 벽 인식과 따로 쓴다. 위에서부터 첫 일치를 쓴다.
+site_roles:
+  - {role: IGNORE, pattern: "thin"}
+  - {role: BOUNDARY, pattern: "site-prop|대지경계|부지경계|prop-?line"}
+  - {role: SPOT, pattern: "site-elev|표고|지반고"}
+  - {role: LEVEL, pattern: "levl|레벨"}
+  - {role: ROOF_PLANTER, pattern: "roof-plnt|옥상.*(화단|식재|조경)"}
+  - {role: PLANTER, pattern: "plnt|식재|화단"}
+  - {role: SKYLIGHT, pattern: "roof-glaz|skylight|천창"}
+  - {role: STEP, pattern: "^l-step|외부계단|옥외계단|단차"}
+  - {role: SITE_RAIL, pattern: "^l-rail|외부난간|옥외난간"}
+  - {role: PARKING, pattern: "prkg-strp|주차구획|주차선"}
+  - {role: PARKING_NOTE, pattern: "prkg|parking|주차"}
+  - {role: OPEN, pattern: "flor-open"}
+  - {role: FURNITURE, pattern: "furn|벤치"}
+
+# 벽 레이어 이름에서 재질을 짐작한다. 해치 패턴이 있으면 해치가 우선이다.
+materials:
+  - {kind: masonry, pattern: "blk|blck|block|brick|조적|벽돌"}
+  - {kind: concrete, pattern: "conc|(?<![a-z0-9])con(?![a-z0-9])|(?<![a-z0-9])rc(?![a-z0-9])|콘크리트"}
+
+# 해치 패턴 → 재질. 사무소마다 다르므로 프로필로 뺄 값이다.
+hatch_patterns:
+  concrete: ["AR-CONC", "CONCRETE"]
+  masonry: ["ANSI31", "AR-BRSTD", "AR-B816", "BRICK"]

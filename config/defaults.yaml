@@ -1,0 +1,254 @@
+# 모든 값은 초기값이다. 실제 도면으로 조정한다. 길이 단위는 mm.
+units:
+  # DIMENSION 표기값 / 실제 길이 비율로 축척을 판정한다.
+  min_dimension_samples: 3
+  ratio_tolerance: 0.02      # 중앙값에서 이 비율 이내면 일치로 본다
+  min_consistent_share: 0.8  # 일치 표본이 이 비율 이상이어야 믿는다
+  majority_share: 0.6        # 흔한 축척값에 맞으면 이 비율로도 받되 scale_mixed로 표시한다
+  snap_tolerance: 0.01       # 흔한 축척값에 이 비율 이내면 맞춘다
+  snap_values: [1, 10, 25.4, 100, 304.8, 1000]
+
+normalize:
+  collinear_angle_deg: 0.5
+  collinear_offset_mm: 1.0
+  gap_mm: 5.0
+  min_length_mm: 1.0
+
+curves:
+  flatten_sagitta_mm: 1.0
+
+regions:
+  cluster_gap_mm: 1500.0
+  min_plan_primitives: 20
+  min_plan_diagonal_mm: 3000.0
+  title_box_max_area_ratio: 0.25
+  frame_min_content_share: 0.95
+  sheet_size_tolerance: 0.01  # 나란한 도곽끼리 크기 차이
+  min_frame_side_mm: 3000.0
+  plan_min_share_of_largest: 0.05
+  frame_span_share: 0.9      # 이만큼 도곽을 가로지르는 선은 도곽선이나 표제란 경계다
+  frame_band_share: 0.3      # 도곽 가장자리에서 이 비율 안의 선만 경계로 본다
+  frame_clip_max_share: 0.3  # 이보다 많이 지워지면 평면까지 지우는 것이므로 하지 않는다
+
+origin:
+  far_threshold_mm: 100000.0
+  offset_round_mm: 1000.0
+
+columns:
+  min_size_mm: 200.0
+  max_size_mm: 2000.0
+  max_aspect: 3.0
+  hatch_min_iou: 0.8
+  layer_trust_min_count: 4   # 이만큼 있으면 기둥 레이어만 믿는다
+  # 격자 반복으로 추정하는 기둥. 결과는 항상 review다
+  grid_max_aspect: 1.5
+  grid_min_count: 8
+  grid_max_count: 2000
+  grid_align_mm: 10.0
+  grid_min_share: 0.7
+  grid_min_spacing_mm: 3000.0
+  grid_line_tol_mm: 300.0
+  line_min_count: 6
+  line_min_share: 0.7
+  line_multiple_tol: 0.1
+  line_min_regular_share: 0.8
+  grid_min_size_mm: 300.0    # 레이어나 채움 근거 없이 기둥으로 볼 최소 크기
+
+walls:
+  direction_tolerance_deg: 0.5
+  min_segment_mm: 1.0
+  # 미분류 레이어를 벽으로 추정하는 기준. 결과는 항상 review다
+  infer_min_paired: 0.6
+  # 벽 이름이 없을 때 모양으로 벽 레이어를 고른다
+  infer_shape_min_share: 0.03
+  infer_shape_long_mm: 2000.0
+  infer_shape_min_long_share: 0.23
+  infer_shape_near_best: 0.75
+  weak_wall_max_share: 0.01
+  weak_wall_min_length_mm: 5000.0
+  infer_min_length_mm: 50000.0
+  infer_max_thickness_mm: 500.0
+  # 미분류 선에서 닫힘을 근거로 찾는 벽. 결과는 항상 review다
+  # 꺼 둔다. 2026-11-05 시험에서 단면도에 새 벽이 10.2%(기준 5%) 생겨 불합격했다
+  candidate_enabled: false
+  candidate_min_thickness_mm: 30.0
+  candidate_max_thickness_mm: 600.0
+  candidate_min_length_mm: 2000.0
+  candidate_anchor_reach_mm: 1000.0
+  candidate_door_gap_mm: 1500.0
+  candidate_min_region_mm2: 4000000.0
+  candidate_passes: 3
+  candidate_repeat_min: 4
+  candidate_repeat_length_bin_mm: 500.0
+  candidate_repeat_gap_tol_mm: 100.0
+  # 벽, 기둥 레이어의 닫힌 도형 중 아직 안 잡힌 작은 것. 그린 모양 그대로 만든다
+  pier_max_size_mm: 3000.0
+  pier_min_area_mm2: 20000.0
+  pier_max_covered_share: 0.5
+  pier_cover_margin_mm: 20.0
+  # 창호 선으로만 그린 유리벽. 결과는 항상 review다
+  glazed_min_thickness_mm: 20.0
+  glazed_max_thickness_mm: 400.0
+  glazed_min_length_mm: 1000.0
+  glazed_anchor_reach_mm: 1500.0
+  glazed_cover_margin_mm: 100.0
+  glazed_duplicate_margin_mm: 200.0
+  glazed_min_output_mm: 100.0
+  # 문 호 옆의 미분류 평행선을 벽으로 올리는 기준. 결과는 항상 review다
+  door_evidence_reach_mm: 1500.0
+  door_evidence_max_thickness_mm: 600.0
+  infer_min_mode_share: 0.6
+  part_block_max_mm: 5000.0   # 이보다 작은 블록은 부품으로 보고 벽 후보에서 뺀다
+  min_thickness_mm: 80.0
+  max_thickness_mm: 1000.0
+  min_overlap_mm: 100.0
+  thickness_bin_mm: 10.0
+  peak_min_share: 0.03       # 칸막이벽은 길이 비중이 작다
+  peak_snap_mm: 20.0
+  outlier_min_length_mm: 1000.0
+  axis_tolerance_mm: 15.0
+  max_bridge_mm: 4000.0      # 이보다 넓은 틈은 개구부로 보지 않는다
+  min_wall_length_mm: 300.0
+  junction_tolerance_mm: 50.0
+  opening_fill_min_share: 0.5
+  single_line_min_mm: 500.0
+  single_line_thickness_mm: 100.0
+  hatch_samples: 5
+  # 벽 레이어가 없을 때만 쓴다
+  geometric_hatch_min_share: 0.5
+  geometric_piece_min_share: 0.5
+  stair_min_repeats: 3
+  stair_max_spacing_mm: 400.0
+  stair_spacing_tolerance_mm: 5.0
+  stair_extent_tolerance_mm: 50.0
+
+openings:
+  min_radius_mm: 500.0
+  max_radius_mm: 1500.0
+  quarter_tol_deg: 10.0
+  axis_tolerance: 0.1        # 호 끝이 벽 방향에서 벗어나도 되는 비율
+  host_tolerance_mm: 50.0
+  door_layer_tolerance_mm: 200.0
+  parallel_cos: 0.999
+  axis_offset_mm: 20.0
+  min_gap_mm: 400.0
+  line_min_coverage: 0.8
+  window_min_lines: 2
+
+rooms:
+  min_area_mm2: 100000.0
+  unnamed_min_area_mm2: 1000000.0
+  outside_tol_mm: 1.0
+  boundary_tol_mm: 5.0
+  area_note_tolerance: 0.05
+
+confidence:
+  high_threshold: 0.85
+  hatch_min_share: 0.5
+  weights: {layer: 0.4, geometry: 0.4, material: 0.2}
+
+stairs:
+  min_tread_mm: 500.0
+  min_treads: 3
+  min_spacing_mm: 150.0
+  max_spacing_mm: 450.0
+  spacing_tol_mm: 30.0
+  min_overlap_share: 0.5
+  angle_bin_deg: 1.0
+  join_gap_mm: 2500.0
+
+voids:
+  min_side_mm: 1000.0
+  corner_tol_mm: 50.0
+
+export:
+  # 공식 SketchUp C SDK 위치. 저장소에 넣지 않는다. CAD2BIM_SKETCHUP_SDK가 있으면 그쪽이 먼저다
+  sketchup_sdk_dir: "C:/SDK_Win"
+  # 평면에 없는 값의 가정값. 도면에서 읽게 되면 대체한다
+  door_height_mm: 2100.0
+  wide_door_height_mm: 2400.0
+  wide_door_min_width_mm: 1500.0
+  window_sill_mm: 900.0
+  window_height_mm: 1800.0
+  rail_height_mm: 1200.0
+  rail_thickness_mm: 100.0
+  slab_thickness_mm: 200.0
+  slab_close_mm: 3000.0
+  slab_min_area_m2: 10.0
+  slab_trim_mm: 1000.0
+  landing_thickness_mm: 200.0
+  # 건물 밖 요소. 도면에 높이 표기가 없는 값의 가정값이다
+  site_base_depth_mm: 500.0
+  site_level_slack_mm: 500.0
+  site_strip_max_width_mm: 1200.0
+  site_stair_max_tread_mm: 400.0
+  site_seat_height_mm: 450.0
+  site_planter_height_mm: 550.0
+  site_roof_planter_height_mm: 500.0
+  site_lawn_height_mm: 60.0
+  site_rail_thickness_mm: 50.0
+  site_rail_post_spacing_mm: 1500.0
+  site_apron_mm: 12000.0
+  site_bollard_height_mm: 900.0
+  site_stripe_width_mm: 120.0
+  site_stripe_height_mm: 20.0
+  site_bench_max_area_mm2: 6000000.0
+  site_equipment_height_mm: 1500.0
+  site_parapet_height_mm: 500.0
+  site_parapet_width_mm: 200.0
+  site_penthouse_height_mm: 1100.0
+  # 조감도 연출 요소. 도면에 없는 값이고 규칙으로만 배치한다. 태그를 끄면 사라진다
+  site_tree_height_mm: 6500.0
+  site_tree_spacing_mm: 8000.0
+  site_tree_limit: 60
+  site_tree_clearance_mm: 3500.0
+  site_tree_inset_mm: 1500.0
+  site_street_tree_offset_mm: 3000.0
+  site_shrub_spacing_mm: 900.0
+  site_shrub_limit: 60
+  site_car_length_mm: 4500.0
+  site_car_width_mm: 1800.0
+  site_slot_min_mm: [2000.0, 4000.0]
+  site_slot_max_mm: [3700.0, 6500.0]
+  site_parking_occupancy: 0.6
+  site_default_margin_mm: 10000.0
+  # 조감도 시점과 그림. 앞 단계 품질을 먼저 올리기로 해 그림 생성은 꺼 둔다
+  aerial_enabled: false
+  aerial_elevation_degrees: 32.0
+  aerial_fov_degrees: 28.0
+  aerial_width_px: 2400
+  aerial_samples_per_pixel: 16
+  aerial_sky_samples: 2
+  shadow_day_of_year: 288
+  # 실사화. 구도와 AI 강도이고 건물별 값이 아니다
+  photo_enabled: false
+  photo_python: "~/.cad2bim_ai/Scripts/python.exe"
+  photo_elevation_degrees: 25.0
+  photo_fov_degrees: 60.0
+  photo_fill: 0.8
+  photo_lift: 0.33
+  photo_city_block_mm: 36000.0
+  photo_city_street_mm: 9000.0
+  photo_city_reach_mm: 800000.0
+  photo_seed: 7
+  photo_strength: 0.8
+  photo_depth_scale: 0.75
+  photo_edge_scale: 0.55
+  photo_steps: 34
+  photo_guidance: 5.5
+  photo_refine_strength: 0.3
+  site_skylight_curb_mm: 1200.0
+  site_skylight_curb_width_mm: 150.0
+  site_skylight_rise_mm: 1000.0
+  site_pergola_height_mm: 2850.0
+  site_pergola_post_mm: 150.0
+  site_pergola_beam_mm: 300.0
+  site_pergola_slat_spacing_mm: 400.0
+  # 스케치업 그림자. 모양을 내는 고정값이다. 위치는 도면에 없어 서울을 쓰고, 도면 위쪽을 북으로 둔다
+  shadow_light: 80
+  shadow_dark: 60
+  shadow_latitude: 37.5
+  shadow_longitude: 127.0
+  shadow_timezone: 9.0
+  # 그 지역의 시계 시각이다. 스케치업은 이 값을 시간대 변환 없이 그대로 읽는다
+  shadow_time_local: "2026-10-15T14:00:00"

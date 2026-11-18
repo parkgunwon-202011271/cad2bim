@@ -1,0 +1,32 @@
+# 평가 허용오차 (상세설계 8.2, 8.4). 초기값.
+walls:
+  distance_mm: 100.0        # ISPRS 벤치마크의 비교 기준 버퍼 10cm
+  angle_deg: 5.0
+  thickness_mm: 10.0
+  sample_step_mm: 50.0
+  correct_share: 0.9        # 벽 길이의 이 비율 이상이 정답과 일치해야 맞은 벽
+  buffer_sweep_mm: [10, 50, 100, 150]   # ISPRS는 1~15cm를 훑는다
+columns:
+  distance_mm: 100.0
+  size_mm: 50.0
+openings:
+  distance_mm: 200.0
+  host_distance_mm: 100.0
+  hinge_distance_mm: 100.0
+  swing_min_dot: 0.9
+rooms:
+  area_ratio: 0.05
+  iou_threshold: 0.5        # 초과해야 일치. RoomFormer 계열과 PQ가 쓰는 값
+junctions:
+  thresholds_mm: [50, 100, 200]   # CV4AEC 끝점 평가의 5/10/20cm
+  primary_mm: 100
+topology:
+  snap_grid_mm: 10.0        # 벽 그래프를 만들 때 끝점을 맞추는 격자
+calibration:
+  bins: 10
+  target_risk: 0.02         # 목표: high로 표시한 요소의 오류 2% 이하
+benchmark:
+  bootstrap_samples: 2000
+  bootstrap_seed: 20261105
+  bootstrap_min_drawings: 5 # 이보다 적으면 신뢰구간을 내지 않는다
+  regression_tolerance: 0.005

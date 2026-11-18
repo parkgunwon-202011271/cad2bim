@@ -1,0 +1,23 @@
+# 도면 종류 분류 사전. 위에서부터 첫 일치를 쓴다. 대소문자 구분 없음.
+# 파일명과 도면 안의 글자에 같은 규칙을 적용한다. 회사마다 다르면 이 파일을 고친다.
+# 구체적인 종류를 먼저 둔다. 배치평면도는 배치, 확대평면도는 상세로 본다.
+kinds:
+  - {kind: table, pattern: "면적표|근거표|일람표|구적|개요|범례|목록|리스트|표지|(?<![a-z])(schedule|legend|index|cover)(?![a-z])"}
+  - {kind: detail, pattern: "상세|확대|전개도|부분도|(?<![a-z])detail(?![a-z])"}
+  - {kind: site, pattern: "배치|대지|교통|토지|조경|토목|현황|계획도|지적|(?<![a-z])site(?![a-z])"}
+  - {kind: vertical, pattern: "입면도|측면도|정면도|배면도|단면도|(?<![a-z])(elevation|section)(?![a-z])"}
+  - {kind: plan, pattern: "평면도|(?<![a-z])(floor\\s*plan|plan)(?![a-z])"}
+
+# 도면 안의 글자는 도면명 형태일 때만 인정한다. 표제란의 "대지위치", 본문의 "평면도 참조",
+# 평면도 옆의 "범례"처럼 단어만 든 글자가 표제를 이기면 안 된다. 끝에 축척이나 번호는 붙어도 된다.
+title_kinds:
+  - {kind: table, pattern: "면적표|근거표|일람표|구적표|구적도|개요표|목록표|도면\\s*목록|범례표|창호표|마감표|(?<![a-z])(schedule|legend)"}
+  - {kind: detail, pattern: "상세도|확대도|확대\\s*평면도|전개도|부분도|(?<![a-z])details?"}
+  - {kind: site, pattern: "배치도|교통[가-힣\\s]*도|[가-힣]*계획도|현황도|조경도|토목도|지적도|대지[가-힣\\s]*도|(?<![a-z])site\\s*plan"}
+  - {kind: vertical, pattern: "입면도|측면도|정면도|배면도|단면도|(?<![a-z])(elevations?|sections?)"}
+  - {kind: plan, pattern: "평면도|(?<![a-z])(floor\\s*)?plans?"}
+title_ignore: "key\\s*plan|키\\s*플랜|안내도"  # 위치 안내용 작은 그림
+title_suffix: "[\\(\\[<].*|s\\s*[:=].*|scale.*|축척.*|[-_ ]*[0-9a-z]{1,3}"
+
+# 층 높이 표기. 단면도와 입면도에 많다.
+level_mark: "^[+\\-±]?\\s*(g\\.?l|f\\.?l|e\\.?l|s\\.?l|r\\.?l)(?![a-z])|(?<![a-z])(g\\.?l|f\\.?l|e\\.?l)\\s*[+\\-±]|최고높이"

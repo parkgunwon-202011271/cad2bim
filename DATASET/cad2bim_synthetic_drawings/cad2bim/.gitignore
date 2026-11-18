@@ -1,0 +1,4 @@
+# 실제 도면은 절대 커밋하지 않음
+real_data/
+*.dwg
+__pycache__/

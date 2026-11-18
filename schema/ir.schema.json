@@ -1,0 +1,889 @@
+{
+  "$defs": {
+    "Column": {
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "title": "Id",
+          "type": "string"
+        },
+        "shape": {
+          "enum": [
+            "rect",
+            "circle",
+            "polygon"
+          ],
+          "title": "Shape",
+          "type": "string"
+        },
+        "center": {
+          "maxItems": 2,
+          "minItems": 2,
+          "prefixItems": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "number"
+            }
+          ],
+          "title": "Center",
+          "type": "array"
+        },
+        "size": {
+          "maxItems": 2,
+          "minItems": 2,
+          "prefixItems": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "number"
+            }
+          ],
+          "title": "Size",
+          "type": "array"
+        },
+        "rotation": {
+          "default": 0,
+          "title": "Rotation",
+          "type": "number"
+        },
+        "polygon": {
+          "anyOf": [
+            {
+              "items": {
+                "maxItems": 2,
+                "minItems": 2,
+                "prefixItems": [
+                  {
+                    "type": "number"
+                  },
+                  {
+                    "type": "number"
+                  }
+                ],
+                "type": "array"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "shape가 polygon일 때 외곽",
+          "title": "Polygon"
+        },
+        "wall_piece": {
+          "default": false,
+          "description": "벽 레이어의 짧은 조각. 벽으로 표시한다",
+          "title": "Wall Piece",
+          "type": "boolean"
+        },
+        "confidence": {
+          "$ref": "#/$defs/Confidence"
+        },
+        "source_handles": {
+          "default": [],
+          "items": {
+            "type": "string"
+          },
+          "title": "Source Handles",
+          "type": "array"
+        }
+      },
+      "required": [
+        "id",
+        "shape",
+        "center",
+        "size",
+        "confidence"
+      ],
+      "title": "Column",
+      "type": "object"
+    },
+    "Confidence": {
+      "additionalProperties": false,
+      "properties": {
+        "level": {
+          "enum": [
+            "high",
+            "review"
+          ],
+          "title": "Level",
+          "type": "string"
+        },
+        "score": {
+          "maximum": 1,
+          "minimum": 0,
+          "title": "Score",
+          "type": "number"
+        },
+        "reasons": {
+          "default": [],
+          "items": {
+            "type": "string"
+          },
+          "title": "Reasons",
+          "type": "array"
+        }
+      },
+      "required": [
+        "level",
+        "score"
+      ],
+      "title": "Confidence",
+      "type": "object"
+    },
+    "Flight": {
+      "additionalProperties": false,
+      "properties": {
+        "start": {
+          "maxItems": 2,
+          "minItems": 2,
+          "prefixItems": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "number"
+            }
+          ],
+          "title": "Start",
+          "type": "array"
+        },
+        "end": {
+          "maxItems": 2,
+          "minItems": 2,
+          "prefixItems": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "number"
+            }
+          ],
+          "title": "End",
+          "type": "array"
+        },
+        "width": {
+          "exclusiveMinimum": 0,
+          "title": "Width",
+          "type": "number"
+        },
+        "treads": {
+          "minimum": 1,
+          "title": "Treads",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "start",
+        "end",
+        "width",
+        "treads"
+      ],
+      "title": "Flight",
+      "type": "object"
+    },
+    "Level": {
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "default": "1F",
+          "title": "Name",
+          "type": "string"
+        },
+        "elevation": {
+          "default": 0,
+          "title": "Elevation",
+          "type": "number"
+        },
+        "height": {
+          "exclusiveMinimum": 0,
+          "title": "Height",
+          "type": "number"
+        }
+      },
+      "required": [
+        "height"
+      ],
+      "title": "Level",
+      "type": "object"
+    },
+    "Opening": {
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "title": "Id",
+          "type": "string"
+        },
+        "type": {
+          "enum": [
+            "door",
+            "window",
+            "unknown"
+          ],
+          "title": "Type",
+          "type": "string"
+        },
+        "operation": {
+          "anyOf": [
+            {
+              "enum": [
+                "swing",
+                "double",
+                "sliding",
+                "fixed"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Operation"
+        },
+        "host_wall": {
+          "title": "Host Wall",
+          "type": "string"
+        },
+        "position": {
+          "description": "호스트 벽 시작점에서 개구부 중심까지의 거리",
+          "minimum": 0,
+          "title": "Position",
+          "type": "number"
+        },
+        "width": {
+          "exclusiveMinimum": 0,
+          "title": "Width",
+          "type": "number"
+        },
+        "hinge": {
+          "anyOf": [
+            {
+              "maxItems": 2,
+              "minItems": 2,
+              "prefixItems": [
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "number"
+                }
+              ],
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Hinge"
+        },
+        "swing_dir": {
+          "anyOf": [
+            {
+              "maxItems": 2,
+              "minItems": 2,
+              "prefixItems": [
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "number"
+                }
+              ],
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Swing Dir"
+        },
+        "confidence": {
+          "$ref": "#/$defs/Confidence"
+        },
+        "source_handles": {
+          "default": [],
+          "items": {
+            "type": "string"
+          },
+          "title": "Source Handles",
+          "type": "array"
+        }
+      },
+      "required": [
+        "id",
+        "type",
+        "host_wall",
+        "position",
+        "width",
+        "confidence"
+      ],
+      "title": "Opening",
+      "type": "object"
+    },
+    "Rail": {
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "title": "Id",
+          "type": "string"
+        },
+        "start": {
+          "maxItems": 2,
+          "minItems": 2,
+          "prefixItems": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "number"
+            }
+          ],
+          "title": "Start",
+          "type": "array"
+        },
+        "end": {
+          "maxItems": 2,
+          "minItems": 2,
+          "prefixItems": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "number"
+            }
+          ],
+          "title": "End",
+          "type": "array"
+        },
+        "confidence": {
+          "$ref": "#/$defs/Confidence"
+        },
+        "source_handles": {
+          "default": [],
+          "items": {
+            "type": "string"
+          },
+          "title": "Source Handles",
+          "type": "array"
+        }
+      },
+      "required": [
+        "id",
+        "start",
+        "end",
+        "confidence"
+      ],
+      "title": "Rail",
+      "type": "object"
+    },
+    "Room": {
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "title": "Id",
+          "type": "string"
+        },
+        "names": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Names",
+          "type": "array"
+        },
+        "point": {
+          "maxItems": 2,
+          "minItems": 2,
+          "prefixItems": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "number"
+            }
+          ],
+          "title": "Point",
+          "type": "array"
+        },
+        "polygon": {
+          "description": "순면적 외곽",
+          "items": {
+            "maxItems": 2,
+            "minItems": 2,
+            "prefixItems": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "number"
+              }
+            ],
+            "type": "array"
+          },
+          "minItems": 3,
+          "title": "Polygon",
+          "type": "array"
+        },
+        "clear_area_m2": {
+          "minimum": 0,
+          "title": "Clear Area M2",
+          "type": "number"
+        },
+        "boundary_wall_ids": {
+          "default": [],
+          "items": {
+            "type": "string"
+          },
+          "title": "Boundary Wall Ids",
+          "type": "array"
+        },
+        "confidence": {
+          "$ref": "#/$defs/Confidence"
+        },
+        "source_handles": {
+          "default": [],
+          "items": {
+            "type": "string"
+          },
+          "title": "Source Handles",
+          "type": "array"
+        }
+      },
+      "required": [
+        "id",
+        "names",
+        "point",
+        "polygon",
+        "clear_area_m2",
+        "confidence"
+      ],
+      "title": "Room",
+      "type": "object"
+    },
+    "SourceInfo": {
+      "additionalProperties": false,
+      "properties": {
+        "file": {
+          "title": "File",
+          "type": "string"
+        },
+        "sha256": {
+          "title": "Sha256",
+          "type": "string"
+        },
+        "region": {
+          "anyOf": [
+            {
+              "maxItems": 4,
+              "minItems": 4,
+              "prefixItems": [
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "number"
+                }
+              ],
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Region"
+        },
+        "unit_scale": {
+          "description": "도면 단위 → mm 배율",
+          "exclusiveMinimum": 0,
+          "title": "Unit Scale",
+          "type": "number"
+        },
+        "unit_source": {
+          "enum": [
+            "user",
+            "dimension",
+            "insunits"
+          ],
+          "title": "Unit Source",
+          "type": "string"
+        }
+      },
+      "required": [
+        "file",
+        "sha256",
+        "unit_scale",
+        "unit_source"
+      ],
+      "title": "SourceInfo",
+      "type": "object"
+    },
+    "Stair": {
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "title": "Id",
+          "type": "string"
+        },
+        "bounds": {
+          "maxItems": 4,
+          "minItems": 4,
+          "prefixItems": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "number"
+            },
+            {
+              "type": "number"
+            },
+            {
+              "type": "number"
+            }
+          ],
+          "title": "Bounds",
+          "type": "array"
+        },
+        "flights": {
+          "items": {
+            "$ref": "#/$defs/Flight"
+          },
+          "title": "Flights",
+          "type": "array"
+        },
+        "confidence": {
+          "$ref": "#/$defs/Confidence"
+        },
+        "source_handles": {
+          "default": [],
+          "items": {
+            "type": "string"
+          },
+          "title": "Source Handles",
+          "type": "array"
+        }
+      },
+      "required": [
+        "id",
+        "bounds",
+        "flights",
+        "confidence"
+      ],
+      "title": "Stair",
+      "type": "object"
+    },
+    "Unsupported": {
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "title": "Kind",
+          "type": "string"
+        },
+        "handles": {
+          "default": [],
+          "items": {
+            "type": "string"
+          },
+          "title": "Handles",
+          "type": "array"
+        },
+        "bbox": {
+          "anyOf": [
+            {
+              "maxItems": 4,
+              "minItems": 4,
+              "prefixItems": [
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "number"
+                }
+              ],
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Bbox"
+        },
+        "note": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Note"
+        }
+      },
+      "required": [
+        "kind"
+      ],
+      "title": "Unsupported",
+      "type": "object"
+    },
+    "Void": {
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "title": "Id",
+          "type": "string"
+        },
+        "bounds": {
+          "maxItems": 4,
+          "minItems": 4,
+          "prefixItems": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "number"
+            },
+            {
+              "type": "number"
+            },
+            {
+              "type": "number"
+            }
+          ],
+          "title": "Bounds",
+          "type": "array"
+        },
+        "confidence": {
+          "$ref": "#/$defs/Confidence"
+        },
+        "source_handles": {
+          "default": [],
+          "items": {
+            "type": "string"
+          },
+          "title": "Source Handles",
+          "type": "array"
+        }
+      },
+      "required": [
+        "id",
+        "bounds",
+        "confidence"
+      ],
+      "title": "Void",
+      "type": "object"
+    },
+    "Wall": {
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "title": "Id",
+          "type": "string"
+        },
+        "start": {
+          "maxItems": 2,
+          "minItems": 2,
+          "prefixItems": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "number"
+            }
+          ],
+          "title": "Start",
+          "type": "array"
+        },
+        "end": {
+          "maxItems": 2,
+          "minItems": 2,
+          "prefixItems": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "number"
+            }
+          ],
+          "title": "End",
+          "type": "array"
+        },
+        "thickness": {
+          "exclusiveMinimum": 0,
+          "title": "Thickness",
+          "type": "number"
+        },
+        "kind": {
+          "enum": [
+            "concrete",
+            "masonry",
+            "curtain",
+            "unknown"
+          ],
+          "title": "Kind",
+          "type": "string"
+        },
+        "confidence": {
+          "$ref": "#/$defs/Confidence"
+        },
+        "source_handles": {
+          "default": [],
+          "items": {
+            "type": "string"
+          },
+          "title": "Source Handles",
+          "type": "array"
+        }
+      },
+      "required": [
+        "id",
+        "start",
+        "end",
+        "thickness",
+        "kind",
+        "confidence"
+      ],
+      "title": "Wall",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": {
+      "default": "0.1",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "source": {
+      "$ref": "#/$defs/SourceInfo"
+    },
+    "units": {
+      "const": "mm",
+      "default": "mm",
+      "title": "Units",
+      "type": "string"
+    },
+    "origin_offset": {
+      "default": [
+        0.0,
+        0.0
+      ],
+      "maxItems": 2,
+      "minItems": 2,
+      "prefixItems": [
+        {
+          "type": "number"
+        },
+        {
+          "type": "number"
+        }
+      ],
+      "title": "Origin Offset",
+      "type": "array"
+    },
+    "level": {
+      "$ref": "#/$defs/Level"
+    },
+    "walls": {
+      "default": [],
+      "items": {
+        "$ref": "#/$defs/Wall"
+      },
+      "title": "Walls",
+      "type": "array"
+    },
+    "columns": {
+      "default": [],
+      "items": {
+        "$ref": "#/$defs/Column"
+      },
+      "title": "Columns",
+      "type": "array"
+    },
+    "openings": {
+      "default": [],
+      "items": {
+        "$ref": "#/$defs/Opening"
+      },
+      "title": "Openings",
+      "type": "array"
+    },
+    "rooms": {
+      "default": [],
+      "items": {
+        "$ref": "#/$defs/Room"
+      },
+      "title": "Rooms",
+      "type": "array"
+    },
+    "stairs": {
+      "default": [],
+      "items": {
+        "$ref": "#/$defs/Stair"
+      },
+      "title": "Stairs",
+      "type": "array"
+    },
+    "voids": {
+      "default": [],
+      "items": {
+        "$ref": "#/$defs/Void"
+      },
+      "title": "Voids",
+      "type": "array"
+    },
+    "rails": {
+      "default": [],
+      "items": {
+        "$ref": "#/$defs/Rail"
+      },
+      "title": "Rails",
+      "type": "array"
+    },
+    "unsupported": {
+      "default": [],
+      "items": {
+        "$ref": "#/$defs/Unsupported"
+      },
+      "title": "Unsupported",
+      "type": "array"
+    },
+    "warnings": {
+      "default": [],
+      "description": "도면 전체에 대한 문자열 코드",
+      "items": {
+        "type": "string"
+      },
+      "title": "Warnings",
+      "type": "array"
+    }
+  },
+  "required": [
+    "source",
+    "level"
+  ],
+  "title": "IR",
+  "type": "object"
+}
