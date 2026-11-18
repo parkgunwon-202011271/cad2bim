@@ -71,8 +71,10 @@ class Api:
             ]
         except Exception:  # 2D 그림이 없어도 3D는 보여 준다
             plans = []
+        furniture_path = out_dir / "furniture.json"  # 없던 시절의 결과도 연다
         return {
             "dae": (out_dir / "building.dae").read_text(encoding="utf-8"),
+            "furniture": json.loads(furniture_path.read_text(encoding="utf-8")) if furniture_path.is_file() else None,
             "summary": summary,
             "plans": plans,
         }

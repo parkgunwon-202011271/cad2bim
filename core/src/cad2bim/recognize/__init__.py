@@ -17,6 +17,7 @@ from .hatches import HatchIndex
 from .openings import OpeningDraft, recognize_openings
 from .rooms import RoomDraft, recognize_rooms
 from .candidate_walls import candidate_walls
+from .door_gaps import walls_across_door_gaps
 from .door_walls import walls_from_door_evidence
 from .glazed import glazed_walls
 from .piers import find_piers
@@ -27,6 +28,7 @@ from .walls import (
     _ColumnIndex,
     _LineIndex,
     clean_junctions,
+    close_collinear_gaps,
     extend_to_anchors,
     recognize_walls,
 )
@@ -120,6 +122,48 @@ def _raw_walls(result: WallResult) -> list[Wall]:
     return walls
 
 
+def _pair_rails(rails: list[tuple[Any, Any, Primitive]], cfg: dict[str, Any]) -> list[tuple[Any, Any, Primitive]]:
+    """난간 하나를 양쪽 면 두 선으로 그린 경우 가운데 선 하나로 합친다.
+
+    나란하고 가까운(pair_max_offset_mm 안) 두 선이 짧은 쪽 길이의 pair_min_overlap 이상 겹치면 같은 난간이다.
+    따로 두면 난간 두 개가 겹쳐 서고 모서리에서 엇갈린다.
+    """
+    segments = [(np.array(a, dtype=float), np.array(b, dtype=float), p) for a, b, p in rails]
+    used: set[int] = set()
+    merged = []
+    for i, (a, b, p) in enumerate(segments):
+        if i in used:
+            continue
+        length = float(np.linalg.norm(b - a))
+        u = (b - a) / length
+        n = np.array([-u[1], u[0]])
+        best = None
+        for j in range(i + 1, len(segments)):
+            if j in used:
+                continue
+            c, d, _ = segments[j]
+            other = float(np.linalg.norm(d - c))
+            if abs(float((d - c) @ u)) / other < cfg["pair_parallel_cos"]:
+                continue
+            offset = float((c - a) @ n)
+            if not 1.0 <= abs(offset) <= cfg["pair_max_offset_mm"] or abs(float((d - a) @ n) - offset) > cfg["pair_offset_tol_mm"]:
+                continue
+            lo, hi = sorted((float((c - a) @ u), float((d - a) @ u)))
+            if min(hi, length) - max(lo, 0.0) < cfg["pair_min_overlap"] * min(length, other):
+                continue
+            if best is None or abs(offset) < abs(best[1]):
+                best = (j, offset, lo, hi)
+        if best is None:
+            merged.append((tuple(a), tuple(b), p))
+            continue
+        j, offset, lo, hi = best
+        used.add(j)
+        start = a + u * min(0.0, lo) + n * offset / 2
+        end = a + u * max(length, hi) + n * offset / 2
+        merged.append((tuple(start), tuple(end), p))
+    return merged
+
+
 def recognize(
     prims: list[Primitive], layers: LayerMap, cfg: dict[str, Any], patterns: dict, walls_only: bool = False
 ) -> Recognition:
@@ -142,6 +186,9 @@ def recognize(
             new_walls, new_pieces = walls_from_door_evidence(prims, layers, result.walls, drafts, hatches, cfg)
         with stage("glazed_walls"):
             curtain = glazed_walls(prims, layers, result.walls + new_walls, drafts, cfg["walls"])
+        # 유리벽까지 찾은 뒤에 한다. 문 옆 벽이 유리벽인 경우가 많다.
+        with stage("door_gaps"):
+            new_walls = new_walls + walls_across_door_gaps(prims, layers, result.walls + new_walls + curtain, drafts, cfg)
         extra: list = []
         if cfg["walls"]["candidate_enabled"]:
             with stage("candidate_walls"):
@@ -154,6 +201,7 @@ def recognize(
             column_index = _ColumnIndex(drafts)
             extend_to_anchors(result.walls, column_index, _LineIndex(prims, layers), cfg["walls"])
             clean_junctions(result.walls, column_index, cfg["walls"])
+            close_collinear_gaps(result.walls, cfg["walls"])
 
     has_hatches = len(hatches) > 0
     ordered = sorted(result.walls, key=lambda w: tuple(np.round(w.start)))
@@ -202,6 +250,7 @@ def recognize(
             else:
                 continue
             rails.extend((a, b, p) for a, b in pairs if ((a[0] - b[0]) ** 2 + (a[1] - b[1]) ** 2) ** 0.5 >= 300.0)
+        rails = _pair_rails(rails, cfg["rails"])
         recognition.rails = [
             Rail(
                 id=f"RL-{i:04d}", start=_rounded(a), end=_rounded(b),

@@ -40,6 +40,26 @@ def _rect_measure(polygon: Polygon) -> tuple[tuple[float, float], float] | None:
     return (w, d), math.atan2(pts[1][1] - pts[0][1], pts[1][0] - pts[0][0]) % (math.pi / 2)
 
 
+def _polygon_candidate(p: Primitive, cfg: dict[str, Any]) -> tuple[str, Polygon, tuple[float, float], float] | None:
+    """사각형이 아닌 닫힌 도형. 모서리를 딴 ㄱ자 기둥처럼 꽉 찬 모양만 받는다."""
+    if p.kind != "polyline" or not p.geometry["closed"]:
+        return None
+    pts = list(p.geometry["points"])
+    if len(pts) > 1 and pts[0] == pts[-1]:
+        pts = pts[:-1]
+    if not 5 <= len(pts) <= cfg["polygon_max_points"]:
+        return None
+    polygon = Polygon(pts)
+    if not polygon.is_valid or polygon.area == 0:
+        return None
+    box = polygon.minimum_rotated_rectangle
+    if polygon.area < box.area * cfg["polygon_min_fill"]:
+        return None
+    ring = list(box.exterior.coords)
+    size = (math.dist(ring[0], ring[1]), math.dist(ring[1], ring[2]))
+    return "polygon", polygon, size, 0.0
+
+
 def _candidate(p: Primitive) -> tuple[str, Polygon, tuple[float, float], float] | None:
     if p.kind == "circle":
         r = p.geometry["radius"]
@@ -205,6 +225,7 @@ def recognize_columns(
 ) -> list[ColumnDraft]:
     drafts: list[ColumnDraft] = []
     seen: set[tuple[int, int]] = set()
+    polygons: list[tuple[Polygon, Primitive, tuple[float, float], bool]] = []
     for p in prims:
         role = layers.role(p.layer)
         if role not in ("COLUMN", "WALL", "UNKNOWN"):
@@ -213,6 +234,8 @@ def recognize_columns(
         if p.kind == "hatch" and role != "COLUMN":
             continue
         found = _candidate(p)
+        if found is None and role == "COLUMN":
+            found = _polygon_candidate(p, cfg)
         if found is None:
             continue
         shape, polygon, size, rotation = found
@@ -229,10 +252,22 @@ def recognize_columns(
         key = (round(center[0]), round(center[1]))
         if key in seen:  # 같은 기둥을 외곽선과 해치로 함께 그린 경우
             continue
+        if shape == "polygon":
+            polygons.append((polygon, p, size, hatched))
+            continue
         seen.add(key)
         drafts.append(ColumnDraft(
             shape, center, size, rotation, polygon,
             {p.id}, list(p.source_handles), p.layer, hatched,
+        ))
+    # 사각형이 아닌 기둥은 외곽선과 안쪽 선을 겹쳐 그리는 일이 많다. 큰 것부터 받고 절반 넘게 겹치면 버린다.
+    for polygon, p, size, hatched in sorted(polygons, key=lambda item: -item[0].area):
+        if any(polygon.intersection(d.polygon).area >= polygon.area * cfg["polygon_max_overlap"] for d in drafts):
+            continue
+        centroid = polygon.centroid
+        seen.add((round(centroid.x), round(centroid.y)))
+        drafts.append(ColumnDraft(
+            "polygon", (centroid.x, centroid.y), size, 0.0, polygon, {p.id}, list(p.source_handles), p.layer, hatched,
         ))
     # 기둥 레이어가 제대로 쓰인 도면에서 다른 레이어의 사각형은 대개 짧은 벽 조각이다.
     on_layer = [d for d in drafts if layers.role(d.layer) == "COLUMN"]

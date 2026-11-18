@@ -147,7 +147,7 @@ def _add_floor(doc: Any, storey: Any, cfg: dict[str, Any], base: tuple[float, fl
         else:
             outline(_rectangle(cx, cy, column.get("rotation", 0.0), column["size"][0], column["size"][1]), "Columns", "column", flag, top_of_wall)
 
-    for rail in ir.get("rails", []):
+    for rail in storey.floor.rails:  # 바닥 위에 선 부분만(floor.plan_floors)
         (x0, y0), (x1, y1) = rail["start"], rail["end"]
         length = math.hypot(x1 - x0, y1 - y0)
         if length > 0:

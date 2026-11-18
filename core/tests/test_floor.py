@@ -135,6 +135,71 @@ def test_stair_climbs_exactly_one_storey():
     assert all(a <= b for a, b in zip(tops[:8], tops[1:9]))
 
 
+def _full_u_stair():
+    """두 단 묶음이 계단 범위 끝에서 끝까지 찬 ㄷ자 계단. 계단참은 범위 밖에 그려져 있다."""
+    return {
+        "id": "ST1", "bounds": (1000, 1000, 3800, 3500), "confidence": CONF,
+        "flights": [
+            {"start": (1600, 1000), "end": (1600, 3500), "width": 1200.0, "treads": 8},
+            {"start": (3200, 1000), "end": (3200, 3500), "width": 1200.0, "treads": 8},
+        ],
+    }
+
+
+def _box_ir(y0, y1):
+    return {"origin_offset": (0, 0), "columns": [], "rooms": [], "openings": [], "walls": [
+        wall(1, (0, y0), (10000, y0)), wall(2, (10000, y0), (10000, y1)), wall(3, (10000, y1), (0, y1)), wall(4, (0, y1), (0, y0)),
+    ]}
+
+
+def test_u_stair_landing_sits_beyond_the_turn_end_up_to_the_wall():
+    storeys = storeys_of(("F1", _with(stairs=[_full_u_stair()])), ("F2", _with()))
+    plan_floors(storeys, EXPORT)
+    _, boxes, landings = storeys[0].floor.stairs[0]
+    assert len(landings) == 1
+    polygon, z0, z1 = landings[0]
+    x0, y0, x1, y1 = polygon.bounds
+    # 북쪽 벽(축 y=5000, 두께 200) 면까지 깊이 1400. 두 단 묶음 폭 전체를 덮는다.
+    assert (y0, y1) == pytest.approx((3500, 4900), abs=1)
+    assert x0 <= 1000 and x1 >= 3800
+    first_flight_top = max(b.z1 for b in boxes[:8])
+    assert z1 > first_flight_top  # 첫 묶음 끝에서 한 단 올라선 높이
+
+
+def test_u_stair_starts_from_the_end_where_the_upper_floor_continues():
+    """윗층 바닥이 북쪽에만 있으면 남쪽 끝이 계단참이고, 북쪽에서 오르기 시작한다."""
+    storeys = storeys_of(("F1", _with(stairs=[_full_u_stair()])), ("F2", _box_ir(3600, 8000)))
+    plan_floors(storeys, EXPORT)
+    _, boxes, landings = storeys[0].floor.stairs[0]
+    _, y0, _, y1 = landings[0][0].bounds
+    assert y1 == pytest.approx(1000, abs=1) and y0 < 1000
+    assert boxes[0].center[1] == pytest.approx(3500)  # 첫 단은 북쪽 끝
+
+
+def test_upper_slab_opens_where_the_stair_from_below_arrives():
+    """층마다 계단 자리가 다른 도면. 윗층 바닥은 아래층 계단이 올라오는 자리에 뚫린다."""
+    from shapely.geometry import Point
+
+    elsewhere = {**_stair(), "bounds": (6000, 1000, 8800, 4000)}
+    storeys = storeys_of(("F1", _with(stairs=[_stair()])), ("F2", _with(stairs=[elsewhere])))
+    plan_floors(storeys, EXPORT)
+    slab = storeys[1].floor.slabs[0]
+    assert not slab.contains(Point(2400, 2500))  # 아래층 계단 위
+    assert slab.contains(Point(7400, 2500))  # 이 층 도면의 계단 자리는 바닥이다
+
+
+def test_rails_stay_as_drawn_even_over_an_opening():
+    """도면을 그대로 옮긴다. 윗층 난간이 아래층 계단 구멍을 가로질러도(층 도면이 맞지 않는 경우) 지우지 않는다."""
+    rails = [
+        {"id": "RL1", "start": (2400, 500), "end": (2400, 4500), "confidence": CONF},  # 구멍(1000~4000)을 가로지른다
+        {"id": "RL2", "start": (6000, 1000), "end": (9000, 1000), "confidence": CONF},
+    ]
+    storeys = storeys_of(("F1", _with(stairs=[_stair()])), ("F2", _with(rails=rails)))
+    plan_floors(storeys, EXPORT)
+    kept = {r["id"]: (r["start"], r["end"]) for r in storeys[1].floor.rails}
+    assert kept == {"RL1": ((2400, 500), (2400, 4500)), "RL2": ((6000, 1000), (9000, 1000))}
+
+
 def test_top_floor_has_no_stair_going_up():
     storeys = storeys_of(("F1", _with()), ("F2", _with(stairs=[_stair()])))
     plan_floors(storeys, EXPORT)

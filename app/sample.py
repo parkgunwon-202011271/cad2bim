@@ -25,6 +25,8 @@ def main() -> int:
         shutil.rmtree(TARGET)
     (TARGET / "plans").mkdir(parents=True)
     shutil.copy2(out_dir / "building.dae", TARGET / "building.dae")
+    if (out_dir / "furniture.json").is_file():
+        shutil.copy2(out_dir / "furniture.json", TARGET / "furniture.json")
     meta_plans = []
     for plan in plans:
         name = f"plans/{plan['path'].name}"

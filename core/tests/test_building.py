@@ -16,6 +16,8 @@ EXPORT = {
     "window_sill_mm": 900.0, "window_height_mm": 1200.0, "rail_height_mm": 1200.0, "rail_thickness_mm": 100.0,
     "slab_thickness_mm": 200.0, "slab_close_mm": 3000.0, "slab_min_area_m2": 10.0, "slab_trim_mm": 1000.0,
     "landing_thickness_mm": 200.0,
+    "stair_landing_min_mm": 900.0, "stair_landing_max_mm": 2500.0, "stair_access_probe_mm": 600.0,
+    "stair_access_min_share": 0.5,
 }
 CONF = {"level": "high", "score": 1.0, "reasons": []}
 

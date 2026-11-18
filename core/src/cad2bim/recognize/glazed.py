@@ -141,7 +141,13 @@ def glazed_walls(
         line = LineString([draft.start, draft.end])
         rest = line.difference(covered) if covered is not None else line
         for part in getattr(rest, "geoms", [rest]):
-            if part.is_empty or part.length < cfg["glazed_min_length_mm"]:
+            if part.is_empty:
+                continue
+            if part.length < cfg["glazed_min_length_mm"] and not (
+                # 문틀과 기둥 사이 같은 짧은 창은 양 끝이 벽이나 기둥에 바로 닿을 때만 받는다.
+                part.length >= cfg["glazed_short_min_length_mm"]
+                and all(anchor_union.distance(Point(q)) <= cfg["glazed_short_anchor_mm"] for q in (part.coords[0], part.coords[-1]))
+            ):
                 continue
             if any(shape.contains(part.interpolate(0.5, normalized=True)) for shape in taken):
                 continue

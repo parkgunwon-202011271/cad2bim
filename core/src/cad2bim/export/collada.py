@@ -55,7 +55,8 @@ MATERIALS = {
     "tree_trunk": ((0.36, 0.26, 0.18), 1.0),
     "shrub": ((0.30, 0.48, 0.24), 1.0),
     "car": ((0.78, 0.79, 0.81), 1.0),
-    "car_dark": ((0.20, 0.21, 0.25), 1.0),
+    # 짙은 남색. 검은 유리(car_glass)와 같은 색이면 옆 칸 차와 붙어 한 덩어리로 보인다.
+    "car_dark": ((0.17, 0.25, 0.45), 1.0),
     "car_glass": ((0.08, 0.09, 0.11), 1.0),
 }
 _GROUPS = {
@@ -200,7 +201,7 @@ def _collect(storeys: list[Any], cfg: dict[str, Any]) -> tuple[list[tuple[str, d
             groups.setdefault("column", []).append((_safe(column["id"]), mesh, outline.area * wall_top(s.height, cfg)))
             counts["columns"] += 1
 
-        for rail in ir.get("rails", []):
+        for rail in s.floor.rails:  # 바닥 위에 선 부분만(floor.plan_floors)
             (x0, y0), (x1, y1) = rail["start"], rail["end"]
             length = math.hypot(x1 - x0, y1 - y0)
             if length <= 0:

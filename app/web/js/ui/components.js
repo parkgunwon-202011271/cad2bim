@@ -44,6 +44,19 @@ export function Tabs({ tabs, active, onChange }) {
   return { el: h('nav', { class: 'c-tabs', role: 'tablist' }, buttons), select };
 }
 
+/** 여러 개 중 하나를 고르는 버튼 묶음. 내부 보기(층 단면) 고르기에 쓴다. */
+export function Segmented({ options, active, onChange }) {
+  const buttons = options.map((opt) => h('button', {
+    class: 'c-segmented__option', type: 'button', 'aria-pressed': String(opt.key === active),
+    onClick: () => select(opt.key),
+  }, opt.label));
+  function select(key) {
+    buttons.forEach((b, i) => b.setAttribute('aria-pressed', String(options[i].key === key)));
+    onChange(key);
+  }
+  return { el: h('div', { class: 'c-segmented', role: 'group' }, buttons), select };
+}
+
 export function ProgressPanel() {
   const text = h('div', { class: 'c-progress__text' }, '도면을 끌어다 놓거나 폴더를 여세요.');
   const fill = h('div', { class: 'c-progress__fill' });

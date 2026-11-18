@@ -214,7 +214,7 @@ def write_ifc(storeys: list[Any], path: Path, cfg: dict[str, Any]) -> dict[str, 
             contained.append(filler)
             counts["doors" if kind == "door" else "windows"] += 1
 
-        for rail in ir.get("rails", []):
+        for rail in s.floor.rails:  # 바닥 위에 선 부분만(floor.plan_floors)
             (x0, y0), (x1, y1) = rail["start"], rail["end"]
             length = math.hypot(x1 - x0, y1 - y0)
             if length <= 0:

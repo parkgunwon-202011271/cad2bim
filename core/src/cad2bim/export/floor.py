@@ -40,6 +40,7 @@ class FloorPlan:
     slabs: list[Polygon] = field(default_factory=list)
     roofs: list[Polygon] = field(default_factory=list)
     stairs: list[tuple[str, list[StairBox], list[tuple[Polygon, float, float]]]] = field(default_factory=list)
+    rails: list[dict[str, Any]] = field(default_factory=list)  # 바닥 위에 선 부분만 남긴 난간 {id, start, end}
 
 
 def _polygons(shape: Any, min_area_mm2: float) -> list[Polygon]:
@@ -90,13 +91,95 @@ def floor_outlines(ir: dict[str, Any], close_mm: float, min_area_m2: float, trim
     return outlines
 
 
-def _stair_boxes(stair: dict[str, Any], height: float, elevation: float, cfg: dict[str, Any]) -> tuple[list[StairBox], list[tuple[Polygon, float, float]]]:
-    """오르는 방향을 평면에서 알 수 없어 단 묶음을 번갈아 오르는 것으로 가정한다."""
-    flights = sorted(stair["flights"], key=lambda f: (f["start"][1], f["start"][0]))
+def _u_turn(stair: dict[str, Any], flights: list[dict[str, Any]]) -> tuple[tuple[float, float], float, float, float, float] | None:
+    """나란한 단 묶음이 계단 범위 끝에서 끝까지 차 있으면 (방향, 축 위 시작·끝, 폭 방향 아래·위). 아니면 None.
+
+    이런 도면은 계단참을 계단 범위 밖에 그린다. 범위 안에서 남는 곳을 찾으면 계단참이 빠진다.
+    """
+    (ax, ay), (bx, by) = flights[0]["start"], flights[0]["end"]
+    length = math.hypot(bx - ax, by - ay)
+    if len(flights) < 2 or not length:
+        return None
+    u = ((bx - ax) / length, (by - ay) / length)
+    n = (-u[1], u[0])
+    along, across = [], []
+    for f in flights:
+        (fx, fy), (gx, gy) = f["start"], f["end"]
+        flen = math.hypot(gx - fx, gy - fy)
+        if not flen or abs(((gx - fx) * u[0] + (gy - fy) * u[1]) / flen) < 0.99:
+            return None  # 꺾인 계단
+        along += [fx * u[0] + fy * u[1], gx * u[0] + gy * u[1]]
+        half = f["width"] / 2
+        middle = fx * n[0] + fy * n[1]
+        across += [middle - half, middle + half]
+    x0, y0, x1, y1 = stair["bounds"]
+    corners = [(x0, y0), (x1, y0), (x1, y1), (x0, y1)]
+    span = [c[0] * u[0] + c[1] * u[1] for c in corners]
+    if max(along) - min(along) < 0.9 * (max(span) - min(span)):
+        return None  # 범위 안에 계단참 자리가 있다
+    return u, min(along), max(along), min(across), max(across)
+
+
+def _strip(u: tuple[float, float], s0: float, s1: float, t0: float, t1: float) -> Polygon:
+    """축 u 방향 [s0, s1], 폭 방향 [t0, t1]인 사각형."""
+    n = (-u[1], u[0])
+    return Polygon([
+        (u[0] * s + n[0] * t, u[1] * s + n[1] * t) for s, t in ((s0, t0), (s1, t0), (s1, t1), (s0, t1))
+    ])
+
+
+def _clear_depth(walls: Any, u: tuple[float, float], end: float, sign: float, t0: float, t1: float, reach: float) -> float | None:
+    """계단 끝에서 바깥으로 벽까지 거리. reach 안에 벽이 없으면 None."""
+    if walls is None:
+        return None
+    lo, hi = (end, end + reach) if sign > 0 else (end - reach, end)
+    hit = walls.intersection(_strip(u, lo, hi, t0 + 50.0, t1 - 50.0))
+    if hit.is_empty:
+        return None
+    coords = [c for g in getattr(hit, "geoms", [hit]) for c in (g.exterior.coords if hasattr(g, "exterior") else g.coords)]
+    return min(abs(x * u[0] + y * u[1] - end) for x, y in coords)
+
+
+def _stair_boxes(
+    stair: dict[str, Any], height: float, elevation: float, cfg: dict[str, Any],
+    walls: Any = None, floor_above: Any = None,
+) -> tuple[list[StairBox], list[tuple[Polygon, float, float]]]:
+    """오르는 방향은 평면에서 알 수 없어 단 묶음을 번갈아 오르는 것으로 가정한다.
+
+    두 단 묶음이 나란히 계단 범위를 다 채우면(ㄷ자 계단) 계단참은 범위 밖, 꺾이는 쪽 끝에 둔다.
+    오르기 시작하는 끝은 윗층 바닥이 이어지는 쪽이다. 반대쪽 끝에 닿으면 허공에 내린다.
+    walls와 floor_above는 이 층 좌표의 벽 입체와 윗층 바닥(없으면 None)이다.
+    """
+    # 방향을 맞추며 고치므로 복사한다. IR은 다른 출력도 읽는다.
+    flights = [dict(f) for f in sorted(stair["flights"], key=lambda f: (f["start"][1], f["start"][0]))]
     total = sum(f["treads"] for f in flights) + len(flights)
     rise = height / total
+    waist = cfg["landing_thickness_mm"]
     boxes: list[StairBox] = []
     landings: list[tuple[Polygon, float, float]] = []
+    turn = _u_turn(stair, flights)
+    landing_strip = None
+    if turn is not None:
+        u, s0, s1, t0, t1 = turn
+        # 첫 단 묶음은 도면대로 s0 → s1로 오른다. 윗층 바닥이 s1 쪽에만 있으면 뒤집는다.
+        if floor_above is not None:
+            probe = cfg["stair_access_probe_mm"]
+
+            def landed(strip: Polygon) -> bool:
+                # 보이드 가장자리의 가는 바닥 조각은 내려설 곳이 아니다. 절반 넘게 바닥이어야 한다.
+                return floor_above.intersection(strip).area >= strip.area * cfg["stair_access_min_share"]
+
+            at_start = landed(_strip(u, s0 - probe, s0 - 1.0, t0, t1))
+            at_end = landed(_strip(u, s1 + 1.0, s1 + probe, t0, t1))
+            if at_end and not at_start:
+                u, s0, s1, t0, t1 = (-u[0], -u[1]), -s1, -s0, -t1, -t0
+        depth = _clear_depth(walls, u, s1, 1.0, t0, t1, cfg["stair_landing_max_mm"])
+        depth = min(max(depth if depth is not None else flights[0]["width"], cfg["stair_landing_min_mm"]), cfg["stair_landing_max_mm"])
+        landing_strip = _strip(u, s1, s1 + depth, t0, t1)
+        for flight in flights:  # 모든 단 묶음을 같은 축 방향(s0 → s1)으로 맞춘 뒤 번갈아 뒤집는다
+            (fx, fy), (gx, gy) = flight["start"], flight["end"]
+            if (gx - fx) * u[0] + (gy - fy) * u[1] < 0:
+                flight["start"], flight["end"] = flight["end"], flight["start"]
     base = elevation
     footprints = []
     for number, flight in enumerate(flights):
@@ -113,9 +196,15 @@ def _stair_boxes(stair: dict[str, Any], height: float, elevation: float, cfg: di
             top = base + rise * (k + 1)
             boxes.append(StairBox(
                 (ax + ux * run * k, ay + uy * run * k), angle, run, flight["width"],
-                base, top,  # 단이 떠 보이지 않게 그 단 묶음의 바닥부터 채운다
+                # 한 단 높이에 계단 두께만큼 아래로. 이어 붙이면 경사진 계단판이 된다.
+                # 단 묶음 바닥까지 채우면 두 번째 묶음이 계단참 위에 벽처럼 선다.
+                max(base, top - rise - waist), top,
             ))
         base += rise * (treads + 1)
+        if landing_strip is not None:
+            if number < len(flights) - 1:
+                landings.append((landing_strip, base - waist, base))
+            continue
         half = flight["width"] / 2
         nx, ny = -uy * half, ux * half
         footprints.append(Polygon([
@@ -156,7 +245,21 @@ def plan_floors(storeys: list[Any], cfg: dict[str, Any]) -> None:
         ir = s.part.ir
         holes = [box(*v["bounds"]) for v in ir.get("voids", [])]
         if index > 0:  # 맨 아래층은 아래로 내려갈 곳이 없다
-            holes += [box(*stair["bounds"]) for stair in bodies[id(s)].get("stairs", [])]
+            # 바닥은 아래층 계단이 올라오는 자리에 뚫는다. 이 층 도면의 계단 자리에 뚫으면, 층마다 계단
+            # 위치가 다른 도면에서 아래층 방으로 떨어지는 구멍과 천장에 막힌 계단이 생긴다.
+            below = ordered[index - 1]
+            if below.align != "unaligned" and s.align != "unaligned":
+                bx, by = world(below)
+                sx, sy = world(s)
+                holes += [
+                    translate(box(*stair["bounds"]), bx - sx, by - sy) for stair in bodies[id(below)].get("stairs", [])
+                ]
+            else:  # 층 위치를 모르면 예전처럼 이 층의 계단 자리를 쓴다
+                holes += [box(*stair["bounds"]) for stair in bodies[id(s)].get("stairs", [])]
+            # 아래층에서 이어지는 승강로는 바닥을 뚫는다. 맨 아래 칸의 바닥(피트)은 남는다.
+            from .elevator import continues_below
+
+            holes += [shaft for shaft in getattr(s, "elevators", []) if continues_below(s, below, shaft)]
         hole = unary_union(holes) if holes else None
         for outline in outlines[id(s)]:
             shape = outline.difference(hole) if hole is not None else outline
@@ -179,7 +282,26 @@ def plan_floors(storeys: list[Any], cfg: dict[str, Any]) -> None:
             plan.roofs.extend(_polygons(shape, cfg["slab_min_area_m2"] * 1e6))
 
         if above is not None:  # 맨 위층 계단은 올라갈 곳이 없다
+            walls = unary_union([
+                LineString([w["start"], w["end"]]).buffer(w["thickness"] / 2, cap_style="flat")
+                for w in ir["walls"] if w["start"] != w["end"]
+            ]) if ir["walls"] else None
+            floor_above = None
+            if s.align != "unaligned" and above.align != "unaligned":
+                ax, ay = world(above)
+                above_voids = [box(*v["bounds"]) for v in above.part.ir.get("voids", [])]
+                shapes = [translate(p, ax - offset[0], ay - offset[1]) for p in outlines[id(above)]]
+                if shapes:
+                    floor_above = unary_union(shapes)
+                    if above_voids:
+                        floor_above = floor_above.difference(
+                            unary_union([translate(v, ax - offset[0], ay - offset[1]) for v in above_voids])
+                        )
             for stair in ir.get("stairs", []):
-                boxes, landings = _stair_boxes(stair, s.height, s.elevation, cfg)
+                boxes, landings = _stair_boxes(stair, s.height, s.elevation, cfg, walls, floor_above)
                 plan.stairs.append((stair["id"], boxes, landings))
+
+        # 난간은 도면에 그린 그대로 둔다. 층마다 도면이 맞지 않아 난간이 아래층 계단 구멍을 가로질러도
+        # 지우지 않는다(도면을 그대로 옮기는 것이 목표다. 맞지 않는 곳은 고치지 않고 알린다).
+        plan.rails = [dict(r) for r in ir.get("rails", [])]
         s.floor = plan

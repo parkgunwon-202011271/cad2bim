@@ -52,12 +52,14 @@ export async function getModel(useSample = false) {
 }
 
 export async function loadSample() {
-  const [dae, meta] = await Promise.all([
+  const [dae, meta, furniture] = await Promise.all([
     fetch('sample/building.dae').then((r) => r.text()),
     fetch('sample/summary.json').then((r) => r.json()),
+    fetch('sample/furniture.json').then((r) => (r.ok ? r.json() : null)).catch(() => null),
   ]);
   return {
     dae,
+    furniture,
     summary: meta.summary,
     plans: meta.plans.map((p) => ({ name: p.name, src: `sample/${p.file}` })),
   };

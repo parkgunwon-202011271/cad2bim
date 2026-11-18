@@ -2,7 +2,7 @@
 import * as api from './api.js';
 import { h } from './ui/dom.js';
 import {
-  Button, DropOverlay, Panel, ProgressPanel, StatList, Tabs, Toast, ToggleList, Toolbar,
+  Button, DropOverlay, Panel, ProgressPanel, Segmented, StatList, Tabs, Toast, ToggleList, Toolbar,
 } from './ui/components.js';
 import { PlanViewer } from './ui/plan-viewer.js';
 import { Viewer3D, floorLabel } from './viewer.js';
@@ -27,18 +27,33 @@ const autoRotate = ToggleList({
   items: [{ key: 'rotate', label: '자동 회전', checked: false }],
   onChange: (_, on) => viewer.setAutoRotate(on),
 });
+// 건축: Revit '음영 + 모서리'처럼 차분한 재료색. 분류 색: 기둥 파랑·문 초록처럼 인식 결과 확인용.
+const styleSwitch = Segmented({
+  options: [{ key: 'arch', label: '건축' }, { key: 'class', label: '분류 색' }],
+  active: 'arch',
+  onChange: (key) => viewer.setStyle(key),
+});
+// 사람 시점: 보던 자리의 바닥에 눈높이로 서서 걷는다. 다시 누르거나 Esc로 나온다.
+const personButton = Button({
+  label: '사람 시점', variant: 'primary', size: 'small',
+  onClick: () => (viewer.person ? viewer.exitPerson() : viewer.enterPerson()),
+});
 const viewPanel = Panel({
   title: '보기',
-  children: [autoRotate, h('div', { class: 'c-panel__row' },
+  children: [styleSwitch.el, autoRotate, h('div', { class: 'c-panel__row' },
+    personButton,
     Button({ label: '시점 초기화', size: 'small', onClick: () => viewer.fit() }))],
 });
+const insidePanel = Panel({ title: '내부 보기', children: [h('div', { class: 'c-panel__empty' }, '모델을 불러오면 층을 고를 수 있습니다.')] });
 const statsPanel = Panel({ title: '결과 요약', children: [h('div', { class: 'c-panel__empty' }, '-')] });
 
 const viewerHost = h('div', { class: 'c-viewer' });
 const viewerEmpty = h('div', { class: 'c-viewer__empty' },
   h('strong', {}, '도면을 여기로 끌어다 놓으세요'),
   'DWG 폴더 하나, 또는 DWG·DXF 파일 여러 개');
-const viewerHelp = h('div', { class: 'c-viewer__help', hidden: true }, '드래그: 회전 · 휠: 확대 · 오른쪽 드래그: 이동');
+const ORBIT_HELP = 'W·A·S·D: 이동 · Q·E: 아래·위 · Shift: 빠르게 · 드래그: 회전 · 휠: 확대 · 오른쪽 드래그: 옮기기';
+const PERSON_HELP = '사람 시점 · W·A·S·D: 걷기 · Shift: 뛰기 · 드래그: 둘러보기 · 휠: 시야 넓히기·좁히기 · Esc: 나가기';
+const viewerHelp = h('div', { class: 'c-viewer__help', hidden: true }, ORBIT_HELP);
 viewerHost.append(viewerEmpty, viewerHelp);
 const view3d = h('div', { class: 'l-stage__view' }, viewerHost);
 const plans = PlanViewer();
@@ -60,7 +75,7 @@ root.append(
   h('div', { class: 'l-app' },
     toolbar,
     h('main', { class: 'l-body' },
-      h('aside', { class: 'l-sidebar' }, progressPanel.el, layersPanel.el, viewPanel.el, statsPanel.el),
+      h('aside', { class: 'l-sidebar' }, progressPanel.el, layersPanel.el, insidePanel.el, viewPanel.el, statsPanel.el),
       h('section', { class: 'l-stage' }, tabs.el, h('div', { class: 'l-stage__body' }, view3d, view2d)),
     ),
   ),
@@ -69,6 +84,14 @@ root.append(
 );
 
 const viewer = new Viewer3D(viewerHost);
+viewer.onPersonChange = (on) => {
+  personButton.textContent = on ? '사람 시점 끝내기' : '사람 시점';
+  viewerHelp.textContent = on ? PERSON_HELP : ORBIT_HELP;
+};
+// 엘리베이터 안에서는 층 고르는 법을 보여 준다.
+viewer.onPersonHint = (hint) => {
+  if (viewer.person) viewerHelp.textContent = hint || PERSON_HELP;
+};
 
 // ---------- 끌어다 놓기 ----------
 // 데스크톱에서는 Python 쪽 drop 처리기가 실제 경로를 받는다. 여기서는 표시만 한다.
@@ -130,9 +153,11 @@ async function showResult(useSample, took = '') {
     const model = await api.getModel(useSample);
     if (!model?.dae) throw new Error('불러올 결과가 없습니다.');
     const floors = viewer.load(model.dae);
+    viewer.setFurniture(model.furniture);
     viewerEmpty.hidden = true;
     viewerHelp.hidden = false;
     renderLayers(floors);
+    renderInside(floors);
     renderStats(model.summary, floors.length);
     plans.setPlans(model.plans || []);
     tabs.select('3d');
@@ -149,9 +174,30 @@ function renderLayers(floors) {
       onChange: (key, on) => viewer.setFloorVisible(key, on),
     }),
     ToggleList({
-      items: [{ key: 'roof', label: '지붕' }, { key: 'site', label: '대지·조경' }],
-      onChange: (key, on) => (key === 'roof' ? viewer.setRoofVisible(on) : viewer.setSiteVisible(on)),
+      items: [
+        { key: 'roof', label: '지붕' }, { key: 'site', label: '대지·조경' },
+        // 도면의 가구·위생기구 선을 바닥에 그린다. 가구가 없는 결과에서는 숨긴다.
+        ...(viewer.hasFurniture() ? [{ key: 'furniture', label: '가구(도면 선)' }] : []),
+      ],
+      onChange: (key, on) => {
+        if (key === 'roof') viewer.setRoofVisible(on);
+        else if (key === 'site') viewer.setSiteVisible(on);
+        else viewer.setFurnitureVisible(on);
+      },
     }),
+  ]);
+}
+
+// 층을 고르면 그 층 바닥 1.2m 위에서 잘라 위를 걷어 낸다. 방·문·창이 평면도처럼 보인다.
+function renderInside(floors) {
+  const cut = Segmented({
+    options: [{ key: '', label: '끔' }, ...floors.map((key) => ({ key, label: floorLabel(key) }))],
+    active: '',
+    onChange: (key) => viewer.setCut(key || null),
+  });
+  insidePanel.setChildren([
+    cut.el,
+    h('p', { class: 'c-panel__hint' }, '층을 고르면 그 층만 남기고 바닥 1.25m 높이에서 잘라 보여 줍니다. 잘린 면은 진하게 칠합니다. W·A·S·D로 방 안을 걸어 다닐 수 있습니다.'),
   ]);
 }
 

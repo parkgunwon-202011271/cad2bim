@@ -27,6 +27,8 @@ from .export.collada import _collect, common_base, verify_dae, write_dae
 from .export.dxf3d import verify_dxf, write_dxf
 from .export.floor import floor_outlines
 from .export.floors import write_editable_files
+from .export.elevator import attach_elevators
+from .export.furniture import write_furniture
 from .export.ifc import verify_ifc, write_ifc
 from .export.photoreal import HEIGHT as PHOTO_HEIGHT
 from .export.photoreal import WIDTH as PHOTO_WIDTH
@@ -474,6 +476,19 @@ def write_photo_image(storeys: list[Storey], path: Path, cfg: dict[str, Any]) ->
     }
 
 
+def _part_drawings(folder: Path, out_dir: Path, storeys: list[Storey]) -> dict[str, Path]:
+    """평면 조각 이름(D03.2) → 그 조각이 나온 DXF. 조각 이름의 점 앞이 도면 번호다."""
+    mapping = json.loads((out_dir / "map.json").read_text(encoding="utf-8"))
+    paths = {p.name: p for p in find_drawings(folder)}
+    result = {}
+    for s in storeys:
+        entry = mapping.get(s.part.part_id.split(".")[0])
+        name = Path(entry["file"]).name if entry else None
+        if name in paths:
+            result[s.part.part_id] = _as_dxf(paths[name], out_dir)
+    return result
+
+
 def run_build(folder: Path, height: float | None = None, jobs: int = 1) -> str:
     folder = Path(folder).resolve()
     if not folder.is_dir():
@@ -491,6 +506,8 @@ def run_build(folder: Path, height: float | None = None, jobs: int = 1) -> str:
     storeys = select_storeys(parts, height or _DEFAULT_FLOOR_HEIGHT, None if height else notes)
     height_source = "user" if height else level_plan([s.key for s in storeys], notes, _DEFAULT_FLOOR_HEIGHT)[2]
     align_storeys(storeys)
+    drawings = _part_drawings(folder, out_dir, storeys)
+    attach_elevators(storeys, drawings, out_dir, cfg)  # 승강로 바닥 뚫기(plan_floors)와 앱 표시에 쓴다
     site_counts = attach_site(storeys, folder, cfg, notes)
     ifc_path = out_dir / "building.ifc"
     counts = write_ifc(storeys, ifc_path, cfg["export"])
@@ -498,6 +515,7 @@ def run_build(folder: Path, height: float | None = None, jobs: int = 1) -> str:
     dae_path = out_dir / "building.dae"
     dae_counts, expected = write_dae(storeys, dae_path, cfg["export"])
     dae_check = verify_dae(dae_path, expected)
+    write_furniture(storeys, drawings, out_dir, cfg)
     dxf_path = out_dir / "building.dxf"
     dxf_counts, dxf_expected = write_dxf(storeys, dxf_path, cfg["export"])
     dxf_check = verify_dxf(dxf_path, dxf_expected)

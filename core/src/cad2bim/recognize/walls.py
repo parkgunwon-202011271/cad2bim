@@ -24,6 +24,7 @@ from .hatches import HatchIndex
 
 _EPS = 1e-6
 _MIN_CROSS = math.sin(math.radians(30))  # 이보다 작은 각으로 만나는 벽은 접합으로 보지 않는다
+_COLLINEAR_COS = math.cos(math.radians(1))  # 이보다 나란하면 같은 방향의 벽이다
 
 
 @dataclass
@@ -627,11 +628,20 @@ def _extend_once(
             ray = LineString([point, tip])
             origin = Point(point)
             hits = [(origin.distance(c), True) for c in columns.crossings(ray)]  # (거리, 기둥인가)
+            # 같은 축의 다른 벽을 넘어 늘리지 않는다. 넘으면 두 벽이 겹친다.
+            blocked = limit
+            normal = np.array([-wall.direction[1], wall.direction[0]])
 
             lo, hi = np.minimum(point, tip) - margin, np.maximum(point, tip) + margin
             for i in tree.query(shapely.box(*lo, *hi)).tolist():
                 other = walls[i]
                 if other is wall:
+                    continue
+                if abs(float(other.direction @ wall.direction)) >= _COLLINEAR_COS:
+                    if abs(float((other.start - point) @ normal)) <= max(wall.thickness, other.thickness) / 2:
+                        a, b = float((other.start - point) @ outward), float((other.end - point) @ outward)
+                        if max(a, b) > tolerance:
+                            blocked = min(blocked, max(min(a, b), 0.0))
                     continue
                 x = _intersection(wall, other)
                 # 상대 벽도 아직 코너까지 닿지 않았을 수 있다.
@@ -640,6 +650,7 @@ def _extend_once(
                 along = float((x - point) @ outward)
                 if 0 < along <= limit:
                     hits.append((along, False))
+            hits = [h for h in hits if h[0] <= blocked + tolerance]
             if not hits:
                 continue
             distance, is_column = min(hits)
@@ -668,6 +679,54 @@ def extend_to_anchors(
     """
     for _ in range(2):
         _extend_once(walls, columns, lines, cfg)
+
+
+def close_collinear_gaps(walls: list[WallDraft], cfg: dict[str, Any]) -> None:
+    """같은 축에서 끝과 끝이 벽 두께 절반 남짓 떨어진 두 벽을 맞붙인다.
+
+    유리벽은 이웃 벽의 외곽(끝에서 두께 절반만큼 더 나간 사각 끝)에 끝을 맞추므로, 내보낸 벽 사이에
+    두께 절반(보통 150mm)짜리 틈이 남아 밖이 보인다. 개구부 최소 폭보다 훨씬 좁아 개구부일 수 없다.
+    추정해 만든 벽(유리·문 메움·후보) 쪽을 옮기고, 둘 다 같은 종류면 가운데서 만난다.
+    """
+    tolerance = cfg["junction_tolerance_mm"]
+    tree = _wall_tree(walls)
+    inferred = lambda w: w.glazed or w.from_door or w.candidate  # noqa: E731
+    for i, wall in enumerate(walls):
+        normal = np.array([-wall.direction[1], wall.direction[0]])
+        for end in (0, 1):
+            point = wall.end if end else wall.start
+            outward = wall.direction if end else -wall.direction
+            reach = wall.thickness / 2 + tolerance
+            for j in tree.query(shapely.box(*(point - reach), *(point + reach))).tolist():
+                if j <= i:
+                    continue
+                other = walls[j]
+                if abs(float(other.direction @ wall.direction)) < _COLLINEAR_COS:
+                    continue
+                if abs(float((other.start - point) @ normal)) > max(wall.thickness, other.thickness) / 2 * 0.5:
+                    continue  # 축이 어긋난 나란한 벽
+                for other_end in (0, 1):
+                    target = other.end if other_end else other.start
+                    gap = float((target - point) @ outward)
+                    # 바깥쪽으로 떨어진 끝만. 겹친 것은 다른 단계에서 다룬다.
+                    if not 1.0 < gap <= max(wall.thickness, other.thickness) / 2 + tolerance:
+                        continue
+                    if inferred(wall) and not inferred(other):
+                        meet = target.copy()
+                    elif inferred(other) and not inferred(wall):
+                        meet = point.copy()
+                    else:
+                        meet = (point + target) / 2
+                    if end:
+                        wall.end = meet.copy()
+                    else:
+                        wall.start = meet.copy()
+                    if other_end:
+                        other.end = meet.copy()
+                    else:
+                        other.start = meet.copy()
+                    wall.joined[end] = other.joined[other_end] = True
+                    point = meet
 
 
 def clean_junctions(walls: list[WallDraft], columns: _ColumnIndex, cfg: dict[str, Any]) -> None:

@@ -7,10 +7,10 @@
         "align": "grid",
         "match": "1.00",
         "alternatives": "0",
-        "walls": "30",
+        "walls": "31",
         "columns": "21",
-        "openings": "30",
-        "rooms": "14"
+        "openings": "29",
+        "rooms": "15"
       },
       {
         "key": "F2",
@@ -19,9 +19,9 @@
         "match": "-",
         "alternatives": "1",
         "walls": "28",
-        "columns": "29",
-        "openings": "29",
-        "rooms": "11"
+        "columns": "28",
+        "openings": "28",
+        "rooms": "12"
       },
       {
         "key": "F3",
@@ -29,23 +29,23 @@
         "align": "same_origin",
         "match": "1.00",
         "alternatives": "1",
-        "walls": "32",
-        "columns": "18",
-        "openings": "13",
-        "rooms": "6"
+        "walls": "35",
+        "columns": "19",
+        "openings": "14",
+        "rooms": "7"
       }
     ],
     "totals": {
-      "walls": "90",
+      "walls": "94",
       "glazed_bands": "16",
       "columns": "68",
-      "openings": "72",
-      "doors": "35",
-      "windows": "25",
+      "openings": "71",
+      "doors": "33",
+      "windows": "27",
       "slabs": "3",
       "stairs": "2",
-      "spaces": "31",
-      "rails": "20",
+      "spaces": "34",
+      "rails": "12",
       "roofs": "2",
       "curtain_walls": "0",
       "skipped_opening": "0",

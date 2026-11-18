@@ -166,6 +166,36 @@ def _wall_gaps(
     return [(a, b) for a, b in spans if b - a >= cfg["min_gap_mm"]]
 
 
+def _leaf_drawn_along_wall(
+    door: OpeningDraft, arc: Primitive, wall: WallDraft, leaf_lines: list[tuple[np.ndarray, np.ndarray]], cfg: dict[str, Any],
+) -> bool:
+    """닫힌 자리로 고른 호의 다리 위에 문짝 선이 그려져 있는가."""
+    center = np.array(arc.geometry["center"], dtype=float)
+    u = wall.direction
+    along = float((center - wall.start) @ u)
+    closed_end = center + u * 2.0 * (door.position - along)
+    tol = cfg["leaf_line_tolerance_mm"]
+    for a, b in leaf_lines:
+        for p, q in ((a, b), (b, a)):
+            if np.linalg.norm(p - center) <= tol and np.linalg.norm(q - closed_end) <= tol:
+                return True
+    return False
+
+
+def _drawn_through(
+    door: OpeningDraft, walls: list[WallDraft], pieces: list[Piece], piece_tree: Any, wall_tree: Any,
+    columns: list[ColumnDraft], column_tree: Any, cfg: dict[str, Any],
+) -> bool:
+    """문짝 자리에 벽선이 끊기지 않고 그려져 있는가. 벽선 쌍으로 찾은 벽만 판단한다."""
+    wall = walls[door.wall]
+    if wall.single_line or wall.from_door or wall.glazed or wall.candidate or not pieces:
+        return False  # 벽선 쌍이 없는 벽은 끊김을 알 수 없다
+    gaps = _wall_gaps(door.wall, walls, pieces, piece_tree, wall_tree, columns, column_tree, cfg)
+    lo, hi = door.position - door.width / 2, door.position + door.width / 2
+    open_share = sum(max(0.0, min(hi, b) - max(lo, a)) for a, b in gaps) / max(door.width, 1e-9)
+    return open_share < cfg["door_min_gap_share"]
+
+
 def _window_lines(prims: list[Primitive], layers: LayerMap) -> tuple[list[tuple[np.ndarray, np.ndarray, str, tuple[str, ...]]], Any]:
     lines = []
     for p in prims:
@@ -225,6 +255,15 @@ def recognize_openings(
         return []
     tree = _wall_tree(walls)
     margin = max(w.thickness for w in walls) / 2 + cfg["door_layer_tolerance_mm"]
+    piece_tree = shapely.STRtree(
+        shapely.linestrings([[p.point(p.s0), p.point(p.s1)] for p in pieces]) if pieces else []
+    )
+    column_tree = shapely.STRtree([c.polygon for c in columns])
+    # 문 레이어의 곧은 선(문짝). 경첩에서 시작하는 선이 문짝의 열린 자리다.
+    leaf_lines = [
+        (np.array(p.geometry["p1"], dtype=float), np.array(p.geometry["p2"], dtype=float))
+        for p in prims if p.kind == "line" and layers.role(p.layer) in _OPENING_ROLES
+    ]
 
     doors = []
     for p in prims:
@@ -245,15 +284,19 @@ def recognize_openings(
             if role in _OPENING_ROLES:
                 stats[f"door_layer_nohost_{_distance_bin(p.geometry['center'], walls, tree)}"] += 1
             continue
+        if _leaf_drawn_along_wall(door, p, walls[door.wall], leaf_lines, cfg):
+            # 문짝 선은 열린 자리에 그린다. 그 선이 벽을 따라 놓였으면 닫힌 자리로 고른 쪽이 사실은 열린 자리다.
+            stats[f"{group}_leaf_along_wall"] += 1
+            continue
+        if _drawn_through(door, walls, pieces, piece_tree, tree, columns, column_tree, cfg):
+            # 벽선이 문짝 자리를 끊김 없이 지나가면 그 벽의 문이 아니다. 화장실 칸막이 문처럼
+            # 칸막이와 바깥벽이 만나는 곳에 경첩이 있으면, 열린 문짝이 벽을 따라 놓여 벽에 걸린 것처럼 보인다.
+            stats[f"{group}_solid_wall"] += 1
+            continue
         stats[f"{group}_hosted"] += 1
         door.role_known = role in _OPENING_ROLES
         doors.append(door)
     doors = _merge_double_doors(doors, cfg)
-
-    piece_tree = shapely.STRtree(
-        shapely.linestrings([[p.point(p.s0), p.point(p.s1)] for p in pieces]) if pieces else []
-    )
-    column_tree = shapely.STRtree([c.polygon for c in columns])
     lines, line_tree = _window_lines(prims, layers)
     others = []
     for index, wall in enumerate(walls):

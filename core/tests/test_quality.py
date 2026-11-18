@@ -97,11 +97,18 @@ def test_tag_prefers_the_hidden_kind_over_review():
     assert element_tags(ir)["W9"] == OUTSIDE
 
 
-def test_stair_is_solid_down_to_the_base_of_its_flight():
+def test_stair_steps_form_a_sloped_slab_not_a_block():
+    """단마다 한 단 높이에 계단판 두께만큼만 내려 채운다. 단 묶음 바닥까지 채우면 두 번째 묶음이
+    계단참 위에 벽처럼 선다."""
     from test_floor import _stair, _with
 
     storeys = storeys_of(("F1", _with(stairs=[_stair()])), ("F2", _with()))
     plan_floors(storeys, EXPORT)
     _, boxes, _ = storeys[0].floor.stairs[0]
-    assert boxes[0].z0 == 0.0 and boxes[7].z0 == 0.0
-    assert boxes[8].z0 > 1000.0 and all(b.z1 > b.z0 for b in boxes)
+    rise = boxes[0].z1
+    waist = EXPORT["landing_thickness_mm"]
+    assert boxes[0].z0 == 0.0
+    assert all(0 < b.z1 - b.z0 <= rise + waist + 1e-6 for b in boxes)
+    # 이웃한 단은 높이가 겹쳐 한 덩어리로 이어진다(떠 있는 단이 없다).
+    assert all(nxt.z0 < cur.z1 for cur, nxt in zip(boxes[:7], boxes[1:8]))
+    assert boxes[8].z0 > 1000.0

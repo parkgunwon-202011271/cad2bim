@@ -93,6 +93,23 @@ body {
   font-weight: var(--font-weight-bold);
 }
 
+/* ---------- Segmented ---------- */
+.c-segmented {
+  display: flex; flex-wrap: wrap; gap: 2px; padding: 2px;
+  background: var(--color-bg-subtle); border-radius: var(--radius-sm);
+}
+.c-segmented__option {
+  flex: 1 1 0; min-width: 48px; height: 28px; padding: 0 var(--space-2); border: 0;
+  border-radius: var(--radius-sm); background: transparent; color: var(--color-text-secondary);
+  font: inherit; font-size: var(--font-size-sm); cursor: pointer;
+}
+.c-segmented__option:hover { color: var(--color-text-primary); }
+.c-segmented__option[aria-pressed="true"] {
+  background: var(--color-bg-surface); color: var(--color-accent-default);
+  font-weight: var(--font-weight-bold); box-shadow: var(--shadow-panel);
+}
+.c-panel__hint { margin: 0; color: var(--color-text-secondary); font-size: var(--font-size-xs); }
+
 /* ---------- ProgressPanel ---------- */
 .c-progress { display: flex; flex-direction: column; gap: var(--space-2); }
 .c-progress__text { font-size: var(--font-size-sm); }
