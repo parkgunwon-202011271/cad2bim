@@ -14,7 +14,7 @@ from typing import Any
 import numpy as np
 from shapely.geometry import Point, Polygon, box
 
-from .floor import door_top, glazing_band, plan_floors, wall_top
+from .floor import door_top, glazing_band, plan_floors, wall_height, wall_top
 from .ifc import _opening_span
 from .mesh import ELEVATION, Mesh, concat, extrude, rotation_z
 
@@ -143,7 +143,7 @@ def _collect(storeys: list[Any], cfg: dict[str, Any]) -> tuple[list[tuple[str, d
                 sill = cfg["window_sill_mm"] if kind == "window" else 0.0
                 top = min(
                     sill + cfg["window_height_mm"] if kind == "window" else door_top(span[1] - span[0], cfg),
-                    wall_top(s.height, cfg),
+                    wall_height(wall, s.height, cfg),
                 )
                 if top <= sill:
                     counts["skipped_opening"] += 1
@@ -151,8 +151,8 @@ def _collect(storeys: list[Any], cfg: dict[str, Any]) -> tuple[list[tuple[str, d
                 x_lo, x_hi = span[0] - length / 2, span[1] - length / 2
                 holes.append((x_lo, sill, x_hi, top))
                 counts["openings"] += 1
-                if kind == "unknown":
-                    continue  # 미확인 틈은 비워 둔다. 문이나 창을 지어내지 않는다
+                if kind == "unknown" or opening.get("void_only"):
+                    continue  # 미확인 틈은 비워 둔다. 문이나 창을 지어내지 않는다. 겹벽 메움의 구멍도 판이 없다
                 panel = extrude(box(x_lo, sill, x_hi, top), _PANEL_MM).transformed(ELEVATION, np.array([0.0, _PANEL_MM / 2, 0.0]))
                 category = "door" if kind == "door" else "window"
                 groups.setdefault(category, []).append((_safe(opening["id"]), panel.transformed(rotation, center), None))
@@ -172,7 +172,7 @@ def _collect(storeys: list[Any], cfg: dict[str, Any]) -> tuple[list[tuple[str, d
                 holes = [*holes, (-length / 2, low, length / 2, high)]
                 category = "wall"
                 counts["glazed_bands"] += 1
-            shape, _ = _wall_mesh(length, wall["thickness"], wall_top(s.height, cfg), holes)
+            shape, _ = _wall_mesh(length, wall["thickness"], wall_height(wall, s.height, cfg), holes)
             parts = _wall_parts(shape)
             for number, part in enumerate(parts):
                 mesh = extrude(part, wall["thickness"]).transformed(ELEVATION, np.array([0.0, wall["thickness"] / 2, 0.0]))

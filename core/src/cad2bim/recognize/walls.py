@@ -112,6 +112,11 @@ def small_instances(prims: list[Primitive], max_size: float) -> set[int]:
     return {i for i, b in bounds.items() if max(b[2] - b[0], b[3] - b[1]) < max_size}
 
 
+def _longest(p: Primitive) -> float:
+    pts = [p.geometry["p1"], p.geometry["p2"]] if p.kind == "line" else list(p.geometry["points"])
+    return max((math.dist(a, b) for a, b in zip(pts, pts[1:])), default=0.0)
+
+
 def collect_segments(
     prims: list[Primitive], layers: LayerMap, columns: list[ColumnDraft], cfg: dict[str, Any]
 ) -> list[Segment]:
@@ -120,8 +125,16 @@ def collect_segments(
     wanted = "WALL" if layers.has_walls else "UNKNOWN"
     small = small_instances(prims, cfg["part_block_max_mm"]) if wanted == "UNKNOWN" else set()
     segments = []
+    # 기둥 레이어에 함께 그린 콘크리트 벽(코어벽 등)도 본다. 기둥이 쓰지 않은 긴 선만이다.
+    from_columns = cfg.get("column_layer_wall_min_mm") if wanted == "WALL" else None
     for p in prims:
-        if p.id in consumed or layers.role(p.layer) != wanted:
+        if p.id in consumed:
+            continue
+        role = layers.role(p.layer)
+        long_column_line = (
+            from_columns is not None and role == "COLUMN" and p.kind in ("line", "polyline") and _longest(p) >= from_columns
+        )
+        if role != wanted and not long_column_line:
             continue
         if wanted == "UNKNOWN" and layers.shape_walls and p.layer not in layers.shape_walls:
             continue
@@ -679,6 +692,161 @@ def extend_to_anchors(
     """
     for _ in range(2):
         _extend_once(walls, columns, lines, cfg)
+
+
+def door_panel_walls(prims: list[Primitive], layers: LayerMap, walls: list[WallDraft], cfg: dict[str, Any]) -> list[WallDraft]:
+    """벽 없이 문 레이어의 나란한 두 선으로만 그린 큰 문(하역장 오버헤드 도어 등)을 문짝 벽으로 만든다.
+
+    벽선이 없으니 벽 틈도 없어 문으로 읽히지 않고 면 전체가 뚫린다. 기존 벽의 범위 안(벽의 틈)에 있는 것은
+    그 벽의 문이므로 만들지 않는다. 만든 벽은 전체가 문이다(from_door).
+    """
+    min_len = cfg.get("door_panel_min_mm")
+    if min_len is None:
+        return []
+    lo_gap, hi_gap = cfg["door_panel_min_gap_mm"], cfg["door_panel_max_gap_mm"]
+    lines = []
+    for p in prims:
+        if p.kind != "line" or layers.role(p.layer) != "DOOR":
+            continue
+        a, b = np.array(p.geometry["p1"], float), np.array(p.geometry["p2"], float)
+        if np.linalg.norm(b - a) >= min_len:
+            lines.append((a, b, p))
+    tree = _wall_tree(walls)
+    found: list[WallDraft] = []
+    used: set[int] = set()
+    for i, (a, b, p) in enumerate(lines):
+        if i in used:
+            continue
+        u = (b - a) / np.linalg.norm(b - a)
+        n = np.array([-u[1], u[0]])
+        for j in range(i + 1, len(lines)):
+            c, d, q = lines[j]
+            v = (d - c) / np.linalg.norm(d - c)
+            if j in used or abs(float(u @ v)) < _COLLINEAR_COS:
+                continue
+            gap = abs(float((c - a) @ n))
+            if not lo_gap <= gap <= hi_gap:
+                continue
+            t0, t1 = sorted((float((c - a) @ u), float((d - a) @ u)))
+            s0, s1 = max(0.0, t0), min(float(np.linalg.norm(b - a)), t1)
+            if s1 - s0 < min_len:
+                continue
+            side = 1.0 if float((c - a) @ n) > 0 else -1.0
+            start = a + u * s0 + n * side * gap / 2
+            end = a + u * s1 + n * side * gap / 2
+            middle = LineString([(start + end) / 2 - u, (start + end) / 2 + u])
+            inside_wall = any(
+                abs(float((walls[k].start - start) @ n)) <= walls[k].thickness / 2 + gap
+                and abs(float(walls[k].direction @ u)) >= _COLLINEAR_COS
+                for k in tree.query(middle.buffer(max((w.thickness for w in walls), default=0.0))).tolist()
+            )
+            if inside_wall:
+                continue
+            found.append(WallDraft(start, end, gap, "unknown", set(p.source_handles) | set(q.source_handles), {p.layer}, 0.0, from_door=True))
+            used.update((i, j))
+            break
+    return found
+
+
+def bridge_across_columns(walls: list[WallDraft], columns: _ColumnIndex, cfg: dict[str, Any]) -> int:
+    """같은 축의 두 벽 사이를 기둥이 막고 있으면 잇는다. 이은 수를 돌려준다.
+
+    외벽 패널을 기둥 바로 바깥에 그리고 기둥 자리에서 끊으면, 벽 끝과 기둥 사이로 밖이 보인다.
+    그 사이에 기둥이 서 있으니 문이나 창일 수 없다. 기둥이 벽 축에서 offset 안에 있을 때만 잇는다.
+    """
+    offset = cfg.get("column_bridge_offset_mm")
+    if offset is None or not columns.columns:
+        return 0
+    slack = cfg["column_bridge_slack_mm"]
+    reach = 2 * columns.max_half + slack
+    tree = _wall_tree(walls)
+    joined = 0
+    for i, wall in enumerate(walls):
+        normal = np.array([-wall.direction[1], wall.direction[0]])
+        for end in (0, 1):
+            point = wall.end if end else wall.start
+            outward = wall.direction if end else -wall.direction
+            best = None
+            for j in tree.query(shapely.box(*(point - reach), *(point + reach))).tolist():
+                other = walls[j]
+                if j == i or abs(float(other.direction @ wall.direction)) < _COLLINEAR_COS:
+                    continue
+                if abs(float((other.start - point) @ normal)) > max(wall.thickness, other.thickness) / 2:
+                    continue
+                near_end = min((other.start, other.end), key=lambda q: float((q - point) @ outward))
+                gap = float((near_end - point) @ outward)
+                far = max(float((other.start - point) @ outward), float((other.end - point) @ outward))
+                if not 1.0 < gap <= reach or far <= gap:
+                    continue
+                if best is None or gap < best[0]:
+                    best = (gap, near_end)
+            if best is None:
+                continue
+            gap, target = best
+            band = shapely.buffer(LineString([point, target]), offset, cap_style="flat")
+            between = [columns.columns[k] for k in columns.polygons.query(band, predicate="intersects").tolist()]
+            if not any(0.0 <= float((np.array(c.center) - point) @ outward) <= gap for c in between):
+                continue
+            if end:
+                wall.end = target.copy()
+            else:
+                wall.start = target.copy()
+            wall.joined[end] = True
+            joined += 1
+    return joined
+
+
+def slit_fillers(walls: list[WallDraft], cfg: dict[str, Any], holes: dict[int, list[tuple[float, float]]] | None = None) -> list[WallDraft]:
+    """나란히 겹쳐 그린 두 벽(외벽 패널 두 겹 등) 사이 좁은 틈을 메우는 얇은 벽.
+
+    도면 축척에서는 붙어 있는 두 겹인데, 3D에서는 그 틈으로 밖이 보인다. 겹친 길이만큼만 메운다.
+    holes는 벽 번호별 개구부 구간(벽 시작에서의 거리)이다. 어느 한쪽 벽에 문·창이 있으면 그 자리는 메우지 않는다.
+    """
+    max_gap = cfg.get("slit_max_mm")
+    if max_gap is None:
+        return []
+    min_overlap = cfg["slit_min_overlap_mm"]
+    tree = _wall_tree(walls)
+    fillers = []
+    for i, a in enumerate(walls):
+        normal = np.array([-a.direction[1], a.direction[0]])
+        reach = a.thickness / 2 + max_gap + max((w.thickness for w in walls), default=0.0) / 2
+        lo = np.minimum(a.start, a.end) - reach
+        hi = np.maximum(a.start, a.end) + reach
+        for j in tree.query(shapely.box(*lo, *hi)).tolist():
+            if j <= i:
+                continue
+            b = walls[j]
+            if abs(float(b.direction @ a.direction)) < _COLLINEAR_COS:
+                continue
+            offset = float((b.start - a.start) @ normal)
+            gap = abs(offset) - (a.thickness + b.thickness) / 2
+            if not 0.0 < gap <= max_gap:
+                continue
+            u = a.direction
+            s0, s1 = 0.0, a.length
+            t0, t1 = sorted((float((b.start - a.start) @ u), float((b.end - a.start) @ u)))
+            o0, o1 = max(s0, t0), min(s1, t1)
+            if o1 - o0 < min_overlap:
+                continue
+            side = 1.0 if offset > 0 else -1.0
+            middle = side * (a.thickness / 2 + gap / 2)
+            cuts = list((holes or {}).get(i, []))
+            for lo_b, hi_b in (holes or {}).get(j, []):  # 다른 벽의 개구부를 이 벽 축으로 옮긴다
+                p0 = float((b.start + b.direction * lo_b - a.start) @ u)
+                p1 = float((b.start + b.direction * hi_b - a.start) @ u)
+                cuts.append((min(p0, p1), max(p0, p1)))
+            pieces = [(o0, o1)]
+            for c0, c1 in cuts:
+                pieces = [q for s0, s1 in pieces for q in ((s0, min(s1, c0)), (max(s0, c1), s1)) if q[1] - q[0] > 1.0]
+            for s0, s1 in pieces:
+                if s1 - s0 < 200.0:
+                    continue
+                start = a.start + u * s0 + normal * middle
+                fillers.append(WallDraft(
+                    start, start + u * (s1 - s0), gap + 2.0, a.kind, set(), set(a.layers) | set(b.layers), 0.0, candidate=True,
+                ))
+    return fillers
 
 
 def close_collinear_gaps(walls: list[WallDraft], cfg: dict[str, Any]) -> None:

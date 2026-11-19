@@ -17,7 +17,7 @@ import ifcopenshell.guid
 import ifcopenshell.util.shape
 import ifcopenshell.validate
 
-from .floor import door_top, floor_outlines, glazing_band, plan_floors, wall_top  # noqa: F401  floor_outlines는 테스트와 다른 모듈이 쓴다
+from .floor import door_top, floor_outlines, glazing_band, plan_floors, wall_height, wall_top  # noqa: F401  floor_outlines는 테스트와 다른 모듈이 쓴다
 
 _VOLUME_TOLERANCE = 0.01
 _VOID_MARGIN_MM = 100.0
@@ -131,6 +131,7 @@ def write_ifc(storeys: list[Any], path: Path, cfg: dict[str, Any]) -> dict[str, 
         anchor = storey.ObjectPlacement
         contained: list[Any] = []
         hosts: dict[str, tuple[Any, Any, float, float]] = {}
+        host_tops: dict[str, float] = {}
 
         for wall in ir["walls"]:
             x0, y0 = wall["start"]
@@ -142,9 +143,10 @@ def write_ifc(storeys: list[Any], path: Path, cfg: dict[str, Any]) -> dict[str, 
             angle = math.atan2(y1 - y0, x1 - x0)
             entity = writer._root("IfcWall", wall["id"])
             entity.ObjectPlacement = writer.placement((x0 + x1) / 2 + dx, (y0 + y1) / 2 + dy, 0.0, angle, anchor)
-            writer.shape(entity, writer.solid(writer.box_profile(length, wall["thickness"]), wall_top(s.height, cfg)))
+            writer.shape(entity, writer.solid(writer.box_profile(length, wall["thickness"]), wall_height(wall, s.height, cfg)))
             contained.append(entity)
             hosts[wall["id"]] = (entity, entity.ObjectPlacement, length, wall["thickness"])
+            host_tops[wall["id"]] = wall_height(wall, s.height, cfg)
             counts["walls"] += 1
             if wall["kind"] == "curtain":
                 # 창호 선만 있는 구간은 벽에 띠창을 낸다. 층고 전체를 유리로 만들지 않는다.
@@ -192,7 +194,7 @@ def write_ifc(storeys: list[Any], path: Path, cfg: dict[str, Any]) -> dict[str, 
             sill = cfg["window_sill_mm"] if kind == "window" else 0.0
             top = min(
                 sill + cfg["window_height_mm"] if kind == "window" else door_top(span[1] - span[0], cfg),
-                wall_top(s.height, cfg),
+                host_tops.get(opening["host_wall"], wall_top(s.height, cfg)),
             )
             if top <= sill:
                 counts["skipped_opening"] += 1
@@ -204,8 +206,8 @@ def write_ifc(storeys: list[Any], path: Path, cfg: dict[str, Any]) -> dict[str, 
             writer.shape(void, writer.solid(writer.box_profile(width, thickness + _VOID_MARGIN_MM), top - sill))
             m.createIfcRelVoidsElement(ifcopenshell.guid.new(), None, None, None, wall_entity, void)
             counts["openings"] += 1
-            if kind == "unknown":
-                continue  # 미확인 틈은 비워 둔다. 문이나 창을 지어내지 않는다
+            if kind == "unknown" or opening.get("void_only"):
+                continue  # 미확인 틈은 비워 둔다. 문이나 창을 지어내지 않는다. 겹벽 메움의 구멍도 판이 없다
             filler = writer._root("IfcDoor" if kind == "door" else "IfcWindow", opening["id"])
             filler.OverallWidth, filler.OverallHeight = float(width), float(top - sill)
             filler.ObjectPlacement = writer.placement(center, 0.0, sill, 0.0, wall_place)

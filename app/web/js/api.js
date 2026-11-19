@@ -51,6 +51,12 @@ export async function getModel(useSample = false) {
   return loadSample();
 }
 
+/** 뒤에서 다 그린 2D 도면. 브라우저 미리보기에는 없다. */
+export async function getPlans() {
+  if (mode === 'desktop') return window.pywebview.api.get_plans();
+  return null;
+}
+
 export async function loadSample() {
   const [dae, meta, furniture] = await Promise.all([
     fetch('sample/building.dae').then((r) => r.text()),

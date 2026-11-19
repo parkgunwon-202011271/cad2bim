@@ -13,8 +13,9 @@ import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { ColladaLoader } from 'three/addons/loaders/ColladaLoader.js';
 
-const FLOOR = /^(B|F)(\d+)$/;
-const FLOOR_PART = /^((?:B|F)\d+)_/;
+// 층 이름: B1·F1…, 부분층(상부·중층) F4M, 지붕 R
+const FLOOR = /^(?:(B|F)(\d+)(M?)|R)$/;
+const FLOOR_PART = /^((?:B|F)\d+M?|R)_/;
 // 미리보기(core/tools/preview.py)에서 지붕 위로 보는 대지 요소와 같다.
 const ROOF_SITE = new Set([
   'SITE_Lawn', 'SITE_RoofPlanters', 'SITE_Pergola', 'SITE_Skylights', 'SITE_SkylightFrames',
@@ -113,7 +114,9 @@ const CAP_COLOR = '#4b4f56'; // 잘린 면(포셰)
 export function floorLabel(key) {
   const m = FLOOR.exec(key);
   if (!m) return key;
-  return m[1] === 'B' ? `지하${m[2]}층` : `${m[2]}층`;
+  if (key === 'R') return '지붕층';
+  const base = m[1] === 'B' ? `지하${m[2]}층` : `${m[2]}층`;
+  return m[3] ? `${base} 상부` : base;
 }
 
 export class Viewer3D {
@@ -1126,6 +1129,7 @@ function skyTexture() {
 }
 
 function level(key) {
+  if (key === 'R') return 1e6;
   const m = FLOOR.exec(key);
-  return m[1] === 'B' ? -Number(m[2]) : Number(m[2]);
+  return (m[1] === 'B' ? -Number(m[2]) : Number(m[2])) + (m[3] ? 0.5 : 0);
 }

@@ -28,7 +28,10 @@ from .walls import (
     _ColumnIndex,
     _LineIndex,
     clean_junctions,
+    bridge_across_columns,
+    door_panel_walls,
     close_collinear_gaps,
+    slit_fillers,
     extend_to_anchors,
     recognize_walls,
 )
@@ -202,6 +205,10 @@ def recognize(
             extend_to_anchors(result.walls, column_index, _LineIndex(prims, layers), cfg["walls"])
             clean_junctions(result.walls, column_index, cfg["walls"])
             close_collinear_gaps(result.walls, cfg["walls"])
+    if drafts:
+        bridge_across_columns(result.walls, _ColumnIndex(drafts), cfg["walls"])
+    panels = door_panel_walls(prims, layers, result.walls, cfg["walls"])
+    result.walls.extend(panels)
 
     has_hatches = len(hatches) > 0
     ordered = sorted(result.walls, key=lambda w: tuple(np.round(w.start)))
@@ -221,11 +228,23 @@ def recognize(
         )
         # 유리 구간 전체가 창이다. 문이 아닌 개구부를 그 위에 또 뚫으면 구멍만 남는다.
         opening_drafts = [d for d in opening_drafts if not (ordered[d.wall].glazed and d.type != "door")]
+        # 문 레이어 선으로만 그린 큰 문은 벽 전체가 문이다(미닫이로 둔다).
+        index_of = {id(w): k for k, w in enumerate(ordered)}
+        opening_drafts += [
+            OpeningDraft("door", index_of[id(w)], w.length / 2, w.length, "sliding", handles=sorted(w.handles), role_known=True)
+            for w in panels
+        ]
     with stage("rooms"):
         room_drafts, open_regions = recognize_rooms(
             prims, layers, ordered, drafts, cfg["rooms"], cfg["walls"]["part_block_max_mm"]
         )
     recognition.openings = [_to_opening(d, i, walls, cfg["confidence"]) for i, d in enumerate(opening_drafts, start=1)]
+    # 두 겹 벽 사이 틈 메우기는 개구부를 찾은 뒤에 한다. 메운 벽에는 그려진 선이 없어 틈으로 잘못 읽힌다.
+    holes: dict[int, list[tuple[float, float]]] = {}
+    for d in opening_drafts:
+        holes.setdefault(d.wall, []).append((d.position - d.width / 2, d.position + d.width / 2))
+    fillers = slit_fillers(ordered, cfg["walls"], holes)
+    walls.extend(_to_wall(d, len(walls) + k, layers, has_hatches, cfg["confidence"]) for k, d in enumerate(fillers, start=1))
     recognition.rooms = [_to_room(d, i, walls, cfg["confidence"]) for i, d in enumerate(room_drafts, start=1)]
     # 평면에서 오르는 방향과 층 사이 연결은 확실하지 않아 근거와 상관없이 검토 대상이다.
     with stage("stairs"):

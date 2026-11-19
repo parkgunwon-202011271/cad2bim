@@ -20,7 +20,7 @@ ROLES = frozenset({
 @dataclass
 class LayerInfo:
     role: str
-    source: str  # dictionary | user | unresolved
+    source: str  # dictionary | user | llm | inferred | unresolved
     material: str | None = None
     stats: dict[str, Any] = field(default_factory=dict)
 
@@ -123,7 +123,11 @@ def drop_weak_walls(layer_map: LayerMap, prims: list[Primitive], min_share: floa
             lengths[p.layer] += sum(((b[0] - a[0]) ** 2 + (b[1] - a[1]) ** 2) ** 0.5 for a, b in zip(points, points[1:]))
     total = sum(lengths.values())
     named = [name for name, info in layer_map.layers.items() if info.role == "WALL"]
-    weak = {name for name in named if lengths[name] < max(total * min_share, min_length_mm)}
+    # 사용자나 LLM이 통계를 보고 정한 벽은 선이 적어도 믿는다.
+    weak = {
+        name for name in named
+        if layer_map.layers[name].source not in ("user", "llm") and lengths[name] < max(total * min_share, min_length_mm)
+    }
     if len(weak) == len(named):  # 벽 레이어가 일부만 약하면 도면이 원래 그렇게 나뉜 것이다
         for name in weak:
             layer_map.layers[name].role = "UNKNOWN"

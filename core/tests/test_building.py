@@ -335,3 +335,19 @@ def test_build_without_floor_information_fails_clearly(tmp_path, capsys):
 
     assert main(["build", str(tmp_path)]) == 2
     assert "층을 정할 수" in capsys.readouterr().err
+
+
+def test_a_file_with_every_floor_wins_over_single_floor_files():
+    """주민센터: B안(최종) 한 파일에 1·2·3층이 다 있고, 따로 있는 2·3층 파일은 다른 버전이었다. 버전이 섞이지 않게 한 벌을 쓴다."""
+    from dataclasses import replace
+
+    def p(floor, pid, length, agrees):
+        return replace(part(floor, length=length, part_id=pid), file_agrees=agrees)
+
+    parts = [p("F1", "D03.2", 100.0, False), p("F2", "D03.1", 100.0, False), p("F3", "D03.3", 100.0, False),
+             p("F2", "D01", 500.0, True), p("F3", "D02", 500.0, True)]
+    chosen = {s.key: s.part.part_id for s in select_storeys(parts, 3000.0)}
+    assert chosen == {"F1": "D03.2", "F2": "D03.1", "F3": "D03.3"}
+    # 모든 층을 담은 파일이 없으면 예전처럼 층 파일을 먼저 쓴다
+    chosen = {s.key: s.part.part_id for s in select_storeys(parts[:2] + parts[3:], 3000.0)}
+    assert chosen["F2"] == "D01" and chosen["F3"] == "D02"

@@ -26,6 +26,7 @@ _TOUCH_MM = 200.0
 _REPEAT_MIN = 4
 _REPEAT_LENGTH_BIN_MM = 500.0
 _REPEAT_GAP_TOL_MM = 100.0
+_JUDGED = frozenset({"llm_outline", "sliver_filled"})  # 검토·틈 메우기로 세운 벽의 근거 표시
 
 
 def _length(wall: dict[str, Any]) -> float:
@@ -66,6 +67,8 @@ def classify(ir: dict[str, Any]) -> dict[str, str]:
     walls = [w for w in ir["walls"] if _length(w) > 0]
     kept = {room_wall for room in ir.get("rooms", []) for room_wall in room.get("boundary_wall_ids", [])}
     kept |= {opening["host_wall"] for opening in ir.get("openings", [])}
+    # LLM 검토가 도면을 보고 벽으로 고른 곳과 좁은 틈을 메운 벽은 추측이 아니다. 숨기면 그 자리가 다시 뚫린다.
+    kept |= {w["id"] for w in walls if _JUDGED & set((w.get("confidence") or {}).get("reasons", []))}
     columns = [tuple(c["center"]) for c in ir["columns"]]
     body = None
     if len(columns) >= _MIN_COLUMNS:

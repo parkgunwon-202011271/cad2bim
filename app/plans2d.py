@@ -62,6 +62,21 @@ def render_plan(dxf_path: Path, png_path: Path, hide_id_numbers: bool = True) ->
     fig.savefig(png_path, dpi=_DPI, facecolor="white")
 
 
+def cached_inputs(out_dir: Path) -> tuple[list[dict], bool]:
+    """이미 그려 둔 입력 도면만 돌려준다. 하나라도 없거나 낡았으면 두 번째 값이 False다."""
+    from cad2bim.evaluation.audit import find_drawings
+
+    target = out_dir / APP_DIR_NAME / "plans"
+    plans, complete = [], True
+    for i, drawing in enumerate(find_drawings(out_dir.parent), start=1):
+        png = target / f"{i:02d}.png"
+        if png.is_file() and png.stat().st_mtime >= drawing.stat().st_mtime:
+            plans.append({"name": drawing.stem, "path": png})
+        else:
+            complete = False
+    return plans, complete
+
+
 def render_inputs(out_dir: Path) -> list[dict]:
     """결과 폴더의 입력 도면을 그린다. 이미 그린 것은 다시 그리지 않는다."""
     from cad2bim.evaluation.audit import _as_dxf, find_drawings

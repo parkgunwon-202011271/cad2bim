@@ -15,7 +15,7 @@ from shapely.geometry import Polygon
 
 from .collada import _collect, _safe, common_base
 from .dxf3d import _ACI
-from .floor import door_top, glazing_band, wall_top
+from .floor import door_top, glazing_band, wall_height, wall_top
 from .quality import HIDDEN, classify
 from .skp import find_sdk, read_editable_skp, read_shadows, write_editable_skp
 
@@ -96,6 +96,8 @@ def _add_floor(doc: Any, storey: Any, cfg: dict[str, Any], base: tuple[float, fl
             middle = (lo + hi) / 2
             cx, cy = x0 + ux * middle + dx, y0 + uy * middle + dy
             flag = tags.get(_safe(opening["id"]), "")
+            if opening.get("void_only"):
+                continue
             if opening["type"] == "door":
                 outline(_rectangle(cx, cy, angle, hi - lo, _LEAF_MM), "Doors", "door", flag, door_top(hi - lo, cfg))
             elif opening["type"] == "window":
@@ -126,7 +128,7 @@ def _add_floor(doc: Any, storey: Any, cfg: dict[str, Any], base: tuple[float, fl
                 )
                 wall_area += 2 * (hi - lo) * wall["thickness"]
             else:
-                outline(corners, name, category, flag, top_of_wall)
+                outline(corners, name, category, flag, wall_height(wall, height, cfg))
                 wall_area += (hi - lo) * wall["thickness"]
 
     for column in ir["columns"]:

@@ -597,7 +597,7 @@ def _audit_plan(
     """평면 하나를 변환하고 숫자 줄을 돌려준다. 실패는 호출한 쪽에서 처리한다."""
     result = convert(
         dxf, out_dir / part_id, cfg, height, tuple(region) if region else None, unit_scale,
-        cache_dir=out_dir / "_prims",
+        cache_dir=out_dir / "_prims", llm_dir=out_dir / "_llm",
     )
     with stage("selfcheck"):
         check = (

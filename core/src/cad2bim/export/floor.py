@@ -15,6 +15,12 @@ def wall_top(height: float, cfg: dict[str, Any]) -> float:
     return height - cfg["slab_thickness_mm"]
 
 
+def wall_height(wall: dict[str, Any], height: float, cfg: dict[str, Any]) -> float:
+    """벽 하나의 높이. top_mm가 있으면 그 높이에서 멈춘다(부분층 아래 벽: 그 위는 부분층 벽이 잇는다)."""
+    top = wall_top(height, cfg)
+    return min(top, float(wall["top_mm"])) if wall.get("top_mm") else top
+
+
 def glazing_band(height: float, cfg: dict[str, Any]) -> tuple[float, float]:
     """창호 선만 그린 구간의 유리 높이. 평면에 없는 값이라 일반 창과 같은 값을 쓴다."""
     sill = cfg["window_sill_mm"]
@@ -70,7 +76,13 @@ def floor_outlines(ir: dict[str, Any], close_mm: float, min_area_m2: float, trim
             shapes.append(polygon)
     if not shapes:
         return []
-    closed = unary_union(shapes).buffer(close_mm, join_style="mitre").buffer(-close_mm, join_style="mitre")
+    try:
+        merged = unary_union(shapes)
+    except Exception:  # GEOS 위상 오류(아주 작은 좌표 어긋남). 1mm 격자로 맞춰 다시 합친다
+        import shapely
+
+        merged = shapely.union_all([shapely.set_precision(s.buffer(0), 1.0) for s in shapes])
+    closed = merged.buffer(close_mm, join_style="mitre").buffer(-close_mm, join_style="mitre")
     closed = unary_union([Polygon(p.exterior) for p in getattr(closed, "geoms", [closed])])
     opened = closed.buffer(-trim_mm, join_style="mitre").buffer(trim_mm, join_style="mitre")
     bodies = [g for g in getattr(opened, "geoms", [opened]) if not g.is_empty]
@@ -89,6 +101,14 @@ def floor_outlines(ir: dict[str, Any], close_mm: float, min_area_m2: float, trim
         if polygon.area >= min_area_m2 * 1e6 and polygon.geom_type == "Polygon" and polygon.is_valid:
             outlines.append(polygon)
     return outlines
+
+
+def _point_segment(p: Any, a: Any, b: Any) -> float:
+    ax, ay = a
+    dx, dy = b[0] - ax, b[1] - ay
+    length2 = dx * dx + dy * dy
+    k = 0.0 if not length2 else max(0.0, min(1.0, ((p[0] - ax) * dx + (p[1] - ay) * dy) / length2))
+    return math.hypot(p[0] - ax - dx * k, p[1] - ay - dy * k)
 
 
 def _u_turn(stair: dict[str, Any], flights: list[dict[str, Any]]) -> tuple[tuple[float, float], float, float, float, float] | None:
@@ -152,8 +172,18 @@ def _stair_boxes(
     """
     # 방향을 맞추며 고치므로 복사한다. IR은 다른 출력도 읽는다.
     flights = [dict(f) for f in sorted(stair["flights"], key=lambda f: (f["start"][1], f["start"][0]))]
+    up = stair.get("up_at")
+    if up and flights:
+        # 도면의 UP 글자에 가장 가까운 단 묶음이 처음 오르는 묶음이고, 글자 쪽 끝에서 오르기 시작한다.
+        first = min(range(len(flights)), key=lambda i: _point_segment(up, flights[i]["start"], flights[i]["end"]))
+        flights.insert(0, flights.pop(first))
+        if math.dist(up, flights[0]["end"]) < math.dist(up, flights[0]["start"]):
+            flights[0]["start"], flights[0]["end"] = flights[0]["end"], flights[0]["start"]
     total = sum(f["treads"] for f in flights) + len(flights)
-    rise = height / total
+    # 평면은 한 바퀴만 그린다. 층고가 높아 단 높이가 한도를 넘으면 같은 계단을 위로 되풀이한다(물리 제약).
+    max_riser = cfg.get("stair_max_riser_mm")
+    cycles = max(1, math.ceil(height / (total * max_riser))) if max_riser and height / total > max_riser else 1
+    rise = height / (total * cycles)
     waist = cfg["landing_thickness_mm"]
     boxes: list[StairBox] = []
     landings: list[tuple[Polygon, float, float]] = []
@@ -162,7 +192,7 @@ def _stair_boxes(
     if turn is not None:
         u, s0, s1, t0, t1 = turn
         # 첫 단 묶음은 도면대로 s0 → s1로 오른다. 윗층 바닥이 s1 쪽에만 있으면 뒤집는다.
-        if floor_above is not None:
+        if floor_above is not None and not up:  # 도면에 UP 표시가 없을 때만 윗층 바닥으로 추측한다
             probe = cfg["stair_access_probe_mm"]
 
             def landed(strip: Polygon) -> bool:
@@ -176,52 +206,56 @@ def _stair_boxes(
         depth = _clear_depth(walls, u, s1, 1.0, t0, t1, cfg["stair_landing_max_mm"])
         depth = min(max(depth if depth is not None else flights[0]["width"], cfg["stair_landing_min_mm"]), cfg["stair_landing_max_mm"])
         landing_strip = _strip(u, s1, s1 + depth, t0, t1)
+        start_strip = _strip(u, s0 - depth, s0, t0, t1)  # 되풀이할 때 바퀴 사이 계단참
         for flight in flights:  # 모든 단 묶음을 같은 축 방향(s0 → s1)으로 맞춘 뒤 번갈아 뒤집는다
             (fx, fy), (gx, gy) = flight["start"], flight["end"]
             if (gx - fx) * u[0] + (gy - fy) * u[1] < 0:
                 flight["start"], flight["end"] = flight["end"], flight["start"]
     base = elevation
     footprints = []
-    for number, flight in enumerate(flights):
-        ax, ay = flight["start"]
-        bx, by = flight["end"]
-        if number % 2:
-            ax, ay, bx, by = bx, by, ax, ay
-        length = math.hypot(bx - ax, by - ay)
-        treads = flight["treads"]
-        run = length / max(treads - 1, 1)
-        ux, uy = ((bx - ax) / length, (by - ay) / length) if length else (1.0, 0.0)
-        angle = math.atan2(uy, ux)
-        for k in range(treads):
-            top = base + rise * (k + 1)
-            boxes.append(StairBox(
-                (ax + ux * run * k, ay + uy * run * k), angle, run, flight["width"],
-                # 한 단 높이에 계단 두께만큼 아래로. 이어 붙이면 경사진 계단판이 된다.
-                # 단 묶음 바닥까지 채우면 두 번째 묶음이 계단참 위에 벽처럼 선다.
-                max(base, top - rise - waist), top,
-            ))
-        base += rise * (treads + 1)
-        if landing_strip is not None:
-            if number < len(flights) - 1:
-                landings.append((landing_strip, base - waist, base))
-            continue
-        half = flight["width"] / 2
-        nx, ny = -uy * half, ux * half
-        footprints.append(Polygon([
-            (ax - ux * run / 2 + nx, ay - uy * run / 2 + ny), (bx + ux * run / 2 + nx, by + uy * run / 2 + ny),
-            (bx + ux * run / 2 - nx, by + uy * run / 2 - ny), (ax - ux * run / 2 - nx, ay - uy * run / 2 - ny),
-        ]))
-        if number < len(flights) - 1:
-            whole = box(*stair["bounds"])
-            rest = whole.difference(unary_union(footprints + [
-                Polygon([
-                    tuple(f["start"]), tuple(f["end"]),
-                    (f["end"][0] + 1.0, f["end"][1] + 1.0), (f["start"][0] + 1.0, f["start"][1] + 1.0),
-                ]).buffer(f["width"] / 2, join_style="mitre") for f in flights
+    for cycle in range(cycles):
+        for number, flight in enumerate(flights):
+            ax, ay = flight["start"]
+            bx, by = flight["end"]
+            if number % 2:
+                ax, ay, bx, by = bx, by, ax, ay
+            length = math.hypot(bx - ax, by - ay)
+            treads = flight["treads"]
+            run = length / max(treads - 1, 1)
+            ux, uy = ((bx - ax) / length, (by - ay) / length) if length else (1.0, 0.0)
+            angle = math.atan2(uy, ux)
+            for k in range(treads):
+                top = base + rise * (k + 1)
+                boxes.append(StairBox(
+                    (ax + ux * run * k, ay + uy * run * k), angle, run, flight["width"],
+                    # 한 단 높이에 계단 두께만큼 아래로. 이어 붙이면 경사진 계단판이 된다.
+                    # 단 묶음 바닥까지 채우면 두 번째 묶음이 계단참 위에 벽처럼 선다.
+                    max(base, top - rise - waist), top,
+                ))
+            base += rise * (treads + 1)
+            if landing_strip is not None:
+                if number < len(flights) - 1:
+                    landings.append((landing_strip, base - waist, base))
+                elif cycle < cycles - 1:
+                    landings.append((start_strip, base - waist, base))
+                continue
+            half = flight["width"] / 2
+            nx, ny = -uy * half, ux * half
+            footprints.append(Polygon([
+                (ax - ux * run / 2 + nx, ay - uy * run / 2 + ny), (bx + ux * run / 2 + nx, by + uy * run / 2 + ny),
+                (bx + ux * run / 2 - nx, by + uy * run / 2 - ny), (ax - ux * run / 2 - nx, ay - uy * run / 2 - ny),
             ]))
-            pieces = _polygons(rest, 0.25e6)
-            if pieces:
-                landings.append((max(pieces, key=lambda p: p.area), base - cfg["landing_thickness_mm"], base))
+            if number < len(flights) - 1:
+                whole = box(*stair["bounds"])
+                rest = whole.difference(unary_union(footprints + [
+                    Polygon([
+                        tuple(f["start"]), tuple(f["end"]),
+                        (f["end"][0] + 1.0, f["end"][1] + 1.0), (f["start"][0] + 1.0, f["start"][1] + 1.0),
+                    ]).buffer(f["width"] / 2, join_style="mitre") for f in flights
+                ]))
+                pieces = _polygons(rest, 0.25e6)
+                if pieces:
+                    landings.append((max(pieces, key=lambda p: p.area), base - cfg["landing_thickness_mm"], base))
     return boxes, landings
 
 
@@ -269,7 +303,9 @@ def plan_floors(storeys: list[Any], cfg: dict[str, Any]) -> None:
         above = ordered[index + 1] if index + 1 < len(ordered) else None
         offset = world(s)
         cover = None
-        if above is not None and s.align != "unaligned" and above.align != "unaligned":
+        if s.key == "R":  # 지붕층은 하늘로 열려 있다. 바닥판이 곧 지붕이고 그 위는 덮지 않는다
+            cover = unary_union(outlines[id(s)]) if outlines[id(s)] else None
+        elif above is not None and s.align != "unaligned" and above.align != "unaligned":
             ax, ay = world(above)
             shifted = [translate(p, ax - offset[0], ay - offset[1]) for p in outlines[id(above)]]
             cover = unary_union(shifted) if shifted else None

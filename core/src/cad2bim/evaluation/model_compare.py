@@ -248,6 +248,8 @@ def compare_model(folder: Path, truth_path: Path, height: float, z_cut: float, c
     total_t = total_tp_t = total_o = total_tp_o = 0.0
     for entry in floors:
         key = entry["floor"]
+        if not key[1:].isdigit():  # 지붕층(R)·부분층(F4M)은 정답 모델의 층 단면과 맞출 수 없다
+            continue
         ir = json.loads((out / entry["part"] / "ir.json").read_text(encoding="utf-8"))
         number = int(key[1:])
         level = (number - 1) * height if key[0] == "F" else -number * height

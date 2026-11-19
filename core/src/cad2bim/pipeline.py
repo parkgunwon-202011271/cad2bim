@@ -11,6 +11,7 @@ from .config import load_layer_dictionary
 from .io import require_converter
 from .ir import IR, Level, SourceInfo
 from .layers import DictionaryClassifier, LayerMap, apply_overrides, drop_weak_walls, promote_inferred_walls
+from .layers.llm import apply_llm_roles
 from .preprocess import Preprocessed, preprocess
 from .preprocess.primitive import BBox
 from .recognize import Recognition, recognize
@@ -68,6 +69,7 @@ def convert(
     unit_scale: float | None = None,
     layer_map: Path | None = None,
     cache_dir: Path | None = None,
+    llm_dir: Path | None = None,
 ) -> ConvertResult:
     path = Path(path)
     if path.suffix.lower() == ".dwg":
@@ -79,6 +81,8 @@ def convert(
 
     dictionary = load_layer_dictionary()
     layers = DictionaryClassifier(dictionary).classify(pre.primitives)
+    # 켜져 있을 때만 LLM이 레이어 역할을 정한다. 답은 llm_dir에 저장해 다시 쓴다. 사용자 수정이 그보다 앞선다.
+    apply_llm_roles(layers, llm_dir if llm_dir is not None else out_dir.parent / "_llm", cfg, pre.source.sha256[:16])
     if layer_map is not None:
         layers = apply_overrides(layers, layer_map)
     with stage("infer_layers"):

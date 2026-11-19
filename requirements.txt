@@ -2,6 +2,7 @@
 # Python 3.11+, Windows 11. All versions pinned so every PC gets the same result.
 # LibreDWG (DWG reader) is not a pip package; it ships in third_party/libredwg.
 # Aerial render (numba) and photoreal (diffusers) are optional; see README.
+# LLM judgment is optional: pip install openai (or google-genai, anthropic), copy .env.example to .env and fill the key.
 # Keep this file ASCII only: pip on Korean Windows reads it as cp949.
 
 -e ./core[dev]

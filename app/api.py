@@ -13,7 +13,7 @@ from pathlib import Path
 import webview
 
 from . import jobs
-from .plans2d import render_inputs
+from .plans2d import cached_inputs, render_inputs
 
 
 class Api:
@@ -65,12 +65,15 @@ class Api:
         out_dir = self._result
         build = out_dir / jobs.APP_DIR_NAME / "build.txt"
         summary = jobs.parse_summary(build.read_text(encoding="utf-8")) if build.is_file() else {}
+        # 3D를 먼저 보여 준다. 아직 안 그린 2D 도면은 뒤에서 그리고, 다 그리면 'plans' 알림을 보낸다.
+        # (도면이 수십 장이면 2D를 다 그리는 데 수십 분 걸려 3D가 막히던 문제)
         try:
-            plans = [
-                {"name": p["name"], "src": _data_url(p["path"])} for p in render_inputs(out_dir)
-            ]
+            cached, complete = cached_inputs(out_dir)
         except Exception:  # 2D 그림이 없어도 3D는 보여 준다
-            plans = []
+            cached, complete = [], True
+        plans = [{"name": p["name"], "src": _data_url(p["path"])} for p in cached]
+        if not complete:
+            self._render_plans_later(out_dir)
         furniture_path = out_dir / "furniture.json"  # 없던 시절의 결과도 연다
         return {
             "dae": (out_dir / "building.dae").read_text(encoding="utf-8"),
@@ -80,6 +83,31 @@ class Api:
         }
 
     # ---- 내부 ----
+
+    def get_plans(self) -> list[dict]:
+        """지금 결과의 2D 도면 중 그려 둔 것."""
+        if self._result is None:
+            return []
+        try:
+            cached, _ = cached_inputs(self._result)
+        except Exception:
+            return []
+        return [{"name": p["name"], "src": _data_url(p["path"])} for p in cached]
+
+    def _render_plans_later(self, out_dir: Path) -> None:
+        if getattr(self, "_plans_thread", None) is not None and self._plans_thread.is_alive():
+            return
+
+        def work() -> None:
+            try:
+                render_inputs(out_dir)
+            except Exception:  # 2D는 보조 기능이다. 실패해도 3D는 그대로 둔다
+                pass
+            if self._result == out_dir:
+                self._emit({"type": "plans"})
+
+        self._plans_thread = threading.Thread(target=work, daemon=True)
+        self._plans_thread.start()
 
     def _pick_folder(self) -> str | None:
         if self._window is None:
@@ -92,9 +120,7 @@ class Api:
             folder = jobs.prepare_input(paths)
             self._emit({"type": "started", "count": jobs.count_drawings(folder)})
             self._result = jobs.run_build(folder, self._emit)
-            self._emit({"type": "progress", "stage": "plans"})
-            render_inputs(self._result)
-            self._emit({"type": "done"})
+            self._emit({"type": "done"})  # 2D 도면은 get_model이 뒤에서 그린다
         except Exception as exc:  # 화면에 보일 문장만 넘긴다
             message = str(exc) if isinstance(exc, (ValueError, RuntimeError)) else type(exc).__name__
             self._emit({"type": "error", "message": message})

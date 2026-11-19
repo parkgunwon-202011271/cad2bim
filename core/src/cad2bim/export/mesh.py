@@ -52,7 +52,7 @@ def concat(meshes: list[Mesh]) -> Mesh:
     return Mesh(np.vstack(vertices), np.vstack(triangles), polygons, soft)
 
 
-def extrude(polygon: Polygon, depth: float) -> Mesh:
+def _extrude(polygon: Polygon, depth: float) -> Mesh:
     """(u, v) 평면의 다각형을 w 방향으로 뽑는다. 구멍이 있어도 닫힌 메시가 된다."""
     polygon = orient(polygon, 1.0)
     index: dict[tuple[float, float], int] = {}
@@ -102,3 +102,17 @@ def rotation_z(angle: float) -> np.ndarray:
 
 # 벽은 입면(길이, 높이)에 구멍을 내고 두께 방향으로 뽑는다. (u, v, w) → (u, -w, v)는 회전이라 면 방향이 유지된다.
 ELEVATION = np.array([[1.0, 0.0, 0.0], [0.0, 0.0, -1.0], [0.0, 1.0, 0.0]])
+
+
+def extrude(polygon: Polygon, depth: float) -> Mesh:
+    """(u, v) 평면의 다각형을 w 방향으로 뽑는다. 구멍이 있어도 닫힌 메시가 된다.
+
+    아주 작은 좌표 어긋남으로 삼각 분할이 실패하면(GEOS 위상 오류) 0.1mm 격자로 맞추고 1mm 이하 굴곡을 펴서 다시 한다.
+    """
+    try:
+        return _extrude(polygon, depth)
+    except shapely.errors.GEOSException:
+        cleaned = shapely.simplify(shapely.set_precision(polygon.buffer(0), 0.1), 1.0)
+        if cleaned.geom_type != "Polygon":
+            cleaned = max(getattr(cleaned, "geoms", [cleaned]), key=lambda g: g.area)
+        return _extrude(cleaned, depth)

@@ -171,6 +171,9 @@ def main(argv: list[str] | None = None) -> int:
     for stream in (sys.stdout, sys.stderr):
         stream.reconfigure(encoding="utf-8")
     args = _parser().parse_args(argv)
+    from .envfile import load_env
+
+    load_env()  # 저장소 맨 위 .env의 키(LLM 등)를 환경 변수로. 이미 설정된 값이 먼저다
     try:
         return _run(args)
     except Cad2BimError as exc:

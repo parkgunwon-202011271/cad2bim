@@ -83,6 +83,10 @@ def run_build(folder: Path, emit: Emit) -> Path:
     jobs = max(1, min(4, (os.cpu_count() or 2) - 1))
     cmd = [sys.executable, "-m", "cad2bim.cli", "build", str(folder), "--jobs", str(jobs)]
     env = dict(os.environ, PYTHONUTF8="1", PYTHONIOENCODING="utf-8")
+    # LLM은 CAD2BIM_LLM(.env 또는 환경 변수)로 직접 켤 때만 쓴다. 키가 있다고 자동으로 켜지 않는다.
+    # 기본은 규칙 기반(cache: 저장된 답이 있으면 쓰고, 외부로 아무것도 보내지 않는다).
+    if not env.get("CAD2BIM_LLM"):
+        env["CAD2BIM_LLM"] = "cache"
     flags = getattr(subprocess, "CREATE_NO_WINDOW", 0)
     proc = subprocess.Popen(
         cmd, cwd=CORE, env=env, stdout=subprocess.PIPE, stderr=subprocess.PIPE, creationflags=flags,

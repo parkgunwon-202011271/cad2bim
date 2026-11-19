@@ -68,6 +68,14 @@ walls:
   infer_shape_long_mm: 2000.0
   infer_shape_min_long_share: 0.23
   infer_shape_near_best: 0.75
+  column_bridge_offset_mm: 400.0   # 같은 축 두 벽 사이를 이 거리 안의 기둥이 막으면 잇는다(기둥 바깥 외벽 패널)
+  column_bridge_slack_mm: 300.0    # 기둥 크기에 더해 이만큼 떨어진 끝까지 잇는다
+  slit_max_mm: 60.0                # 나란한 두 벽 면 사이가 이 이하면 메운다(두 겹 패널)
+  slit_min_overlap_mm: 1000.0
+  door_panel_min_mm: 2000.0        # 벽 없이 문 레이어의 나란한 두 선(이 길이 이상)으로 그린 큰 문은 문짝 벽으로 만든다
+  door_panel_min_gap_mm: 40.0
+  door_panel_max_gap_mm: 200.0
+  column_layer_wall_min_mm: 1500.0  # 기둥 레이어의 이 길이 이상 선(기둥이 안 쓴 것)도 벽 후보. 코어벽을 구조 레이어에 그리는 도면
   weak_wall_max_share: 0.01
   weak_wall_min_length_mm: 5000.0
   infer_min_length_mm: 50000.0
@@ -146,6 +154,8 @@ openings:
   leaf_line_tolerance_mm: 30.0  # 문짝 선 끝이 경첩·호 끝과 이만큼 안에 있으면 그 호의 문짝이다
   line_min_coverage: 0.8
   window_min_lines: 2
+  door_gap_reach_mm: 300.0   # 벽 틈 둘레 이 거리 안의 문 레이어 선을 본다
+  door_gap_min_share: 0.5    # 문 레이어 선이 틈 폭의 이 비율 이상이면 문(호 없는 미닫이·오버헤드·방열문)
 
 rails:
   # 난간 양쪽 면을 두 선으로 그린 경우 한 난간으로 합친다
@@ -179,6 +189,8 @@ stairs:
 voids:
   min_side_mm: 1000.0
   corner_tol_mm: 50.0
+  corner_tol_share: 0.03    # 큰 X자는 대각선 길이의 이 비율까지 모서리 어긋남을 받는다
+  min_overlap_iou: 0.6      # 고르지 않은 실의 X: 서로 가로지르고 두 대각선 범위가 이만큼 겹치면 뚫린 곳
 
 export:
   # 공식 SketchUp C SDK 위치. 저장소에 넣지 않는다. CAD2BIM_SKETCHUP_SDK가 있으면 그쪽이 먼저다
@@ -220,6 +232,7 @@ export:
     - {pattern: "책장|서가|book", kind: shelf, z0: 0, z1: 2000}
     - {pattern: "소파|sofa", kind: chair, z0: 0, z1: 750}
   # ㄷ자 계단의 계단참을 계단 범위 밖에 둘 때. 깊이는 끝에서 벽까지이되 이 사이로 맞춘다
+  stair_max_riser_mm: 200.0      # 단 높이가 이를 넘으면 평면의 계단을 위로 되풀이한다(층고가 높은 층)
   stair_landing_min_mm: 900.0
   stair_landing_max_mm: 2500.0
   stair_access_probe_mm: 600.0  # 계단 끝 바깥 이만큼에 윗층 바닥이 있으면 그쪽에서 오르기 시작한다
@@ -299,3 +312,14 @@ export:
   shadow_timezone: 9.0
   # 그 지역의 시계 시각이다. 스케치업은 이 값을 시간대 변환 없이 그대로 읽는다
   shadow_time_local: "2026-10-15T14:00:00"
+
+# LLM 보조 판단. 기본은 꺼짐(외부 통신 없음). 환경 변수 CAD2BIM_LLM(off|anthropic|cache)이 이 값보다 앞선다.
+# 켜면 레이어 이름과 통계(좌표·글자 내용 제외)를 Claude로 보낸다. 답은 결과 폴더의 _llm/에 저장해 다시 쓴다.
+llm:
+  enabled: false
+  provider: anthropic        # anthropic | gemini | cache(저장된 답만 사용). 환경 변수 CAD2BIM_LLM이 앞선다
+  models:                    # 공급자별 모델. 키는 환경 변수(ANTHROPIC_API_KEY, GEMINI_API_KEY)에서만 읽는다
+    anthropic: claude-sonnet-5-5
+    gemini: gemini-3.5-flash-lite   # 무료 등급에서 하루 500번·분당 15번까지 쓸 수 있는 모델
+  requests_per_minute: 14    # 분당 호출 한도보다 조금 낮게. 0이면 쉬지 않는다
+  max_layers_per_call: 150

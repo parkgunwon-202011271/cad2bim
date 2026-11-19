@@ -58,3 +58,4 @@ def test_floor_lines_use_model_coordinates_and_skip_other_plans(monkeypatch):
     lines = furniture.floor_furniture(storey, None, roles, (500.0, 500.0), {}, None)
     # 모델 좌표 = IR + 원점 이동 + 층 이동 - 공통 원점
     assert lines == [[1000 + 1000 + 100 - 500, 1000 + 2000 - 500, 2000 + 1000 + 100 - 500, 1000 + 2000 - 500]]
+

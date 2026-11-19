@@ -203,6 +203,9 @@ api.onEvent(async (event) => {
     const took = started ? ` · ${elapsed()}` : '';
     started = 0;
     await showResult(Boolean(event.sample), took);
+  } else if (event.type === 'plans') {
+    const ready = await api.getPlans();
+    if (ready) plans.setPlans(ready);
   } else if (event.type === 'error') {
     clearInterval(ticker);
     started = 0;

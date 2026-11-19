@@ -205,6 +205,46 @@ def _window_lines(prims: list[Primitive], layers: LayerMap) -> tuple[list[tuple[
     return lines, tree
 
 
+def _door_shapes(prims: list[Primitive], layers: LayerMap) -> tuple[list[Any], list[tuple[str, ...]], Any]:
+    """문 레이어의 선과 호. 호 없이 선으로만 그린 문(미닫이, 오버헤드, 방열문)을 틈에서 찾는 데 쓴다."""
+    shapes, sources = [], []
+    for p in prims:
+        if layers.role(p.layer) != "DOOR":
+            continue
+        if p.kind == "line":
+            pts = [p.geometry["p1"], p.geometry["p2"]]
+        elif p.kind == "polyline":
+            pts = list(p.geometry["points"])
+        elif p.kind == "arc":
+            pts = [p.geometry["start"], p.geometry["end"]]
+        else:
+            continue
+        if len(pts) >= 2 and any(a != b for a, b in zip(pts, pts[1:])):
+            shapes.append(shapely.linestrings(pts))
+            sources.append(p.source_handles)
+    return shapes, sources, shapely.STRtree(shapes)
+
+
+def _door_in_gap(wall: WallDraft, gap: tuple[float, float], doors: tuple[list[Any], list[Any], Any], cfg: dict[str, Any]) -> list[str] | None:
+    """틈 둘레에 문 레이어 선이 틈 폭의 일정 비율 이상 그려져 있으면 그 출처를 돌려준다."""
+    shapes, sources, tree = doors
+    if not shapes:
+        return None
+    u = wall.direction
+    a = wall.start + u * gap[0]
+    b = wall.start + u * gap[1]
+    area = shapely.buffer(shapely.linestrings([a, b]), wall.thickness / 2 + cfg["door_gap_reach_mm"], cap_style="flat")
+    length, handles = 0.0, []
+    for j in tree.query(area).tolist():
+        inside = shapely.intersection(shapes[j], area)
+        if not inside.is_empty:
+            length += float(inside.length)
+            handles += list(sources[j])
+    if length >= (gap[1] - gap[0]) * cfg["door_gap_min_share"]:
+        return sorted(set(handles))
+    return None
+
+
 def _classify_gap(
     wall: WallDraft, gap: tuple[float, float], lines: list[Any], tree: Any, layers: LayerMap, cfg: dict[str, Any],
 ) -> tuple[str, list[str], bool]:
@@ -298,6 +338,7 @@ def recognize_openings(
         doors.append(door)
     doors = _merge_double_doors(doors, cfg)
     lines, line_tree = _window_lines(prims, layers)
+    door_shapes = _door_shapes(prims, layers) if "door_gap_min_share" in cfg else ([], [], None)
     others = []
     for index, wall in enumerate(walls):
         # 선 한 줄로 그린 벽에는 벽선 쌍이 없어 틈을 판단할 수 없다. 문 호로 찾은 벽은 일부만 찾은
@@ -310,6 +351,10 @@ def recognize_openings(
             if any(abs(d.position - center) <= (d.width + gap[1] - gap[0]) / 2 for d in taken):
                 continue
             kind, handles, known = _classify_gap(wall, gap, lines, line_tree, layers, cfg)
+            if kind == "unknown":
+                drawn = _door_in_gap(wall, gap, door_shapes, cfg)
+                if drawn is not None:  # 호 없이 선으로 그린 문. 도면에 있는 문이라 비워 두지 않는다
+                    kind, handles, known = "door", drawn, True
             others.append(OpeningDraft(
                 kind, index, center, gap[1] - gap[0], "fixed" if kind == "window" else None,
                 handles=handles, role_known=known,

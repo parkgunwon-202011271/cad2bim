@@ -243,3 +243,61 @@ def test_outputs_contain_voids_roofs_and_stairs_and_pass_checks(tmp_path):
     dae_check = verify_dae(dae, expected)
     assert dae_counts["stairs"] == 1 and dae_check["volume_mismatch"] == 0 and dae_check["inside_out"] == 0
     assert read_meshes(dae)["F1_ST1"].volume > 0
+
+
+def test_large_hand_drawn_open_mark_on_a_center_line_layer_is_a_void():
+    """큰 OPEN 표시는 모서리에서 수백 mm 어긋나고, 중심선 레이어에 긋기도 한다(물류 4층 상부)."""
+    cfg = {**VOIDS, "corner_tol_share": 0.03}
+    prims = [line((0, 28000), (10450, 0)), line((550, 450), (10625, 27850))]
+    voids = recognize_voids(prims, layers(X="GRID"), cfg)
+    assert len(voids) == 1 and voids[0].bounds == (0, 0, 10625, 28000)
+    assert not recognize_voids(prims, layers(X="GRID"), VOIDS)  # 비율 허용이 없으면 50mm로는 못 맞춘다
+
+
+def test_x_across_an_irregular_room_is_a_void_covering_both_diagonals():
+    cfg = {**VOIDS, "corner_tol_share": 0.03, "min_overlap_iou": 0.6}
+    prims = [line((29096, 1866), (-3004, -22594)), line((39796, -22594), (-1804, 4706))]  # 물류 4층 상부의 큰 OPEN
+    voids = recognize_voids(prims, layers(X="GRID"), cfg)
+    assert len(voids) == 1 and voids[0].bounds == (-3004, -22594, 39796, 4706)
+    apart = [line((0, 0), (10000, 8000)), line((30000, 0), (20000, 8000))]  # 엇갈리지 않으면 아니다
+    assert not recognize_voids(apart, layers(X="UNKNOWN"), cfg)
+
+
+def test_tall_storey_repeats_the_drawn_stair_so_risers_stay_climbable():
+    """평면은 한 바퀴만 그린다. 10m 층에 16단이면 단 높이 0.6m라 오를 수 없다. 되풀이해 200mm 이하로."""
+    from cad2bim.export.floor import _stair_boxes
+
+    stair = _stair()
+    cfg = {**EXPORT, "stair_max_riser_mm": 200.0}
+    boxes, landings = _stair_boxes(stair, 10000.0, 0.0, cfg)
+    treads = sum(f["treads"] for f in stair["flights"])
+    rises = sorted({round(b.z1 - max(b.z0, 0.0), 3) for b in boxes})
+    assert len(boxes) % treads == 0 and len(boxes) // treads >= 3
+    assert max(b.z1 for b in boxes) <= 10000.0 + 1e-6
+    tops = sorted(b.z1 for b in boxes)
+    rise = min(b - a for a, b in zip(tops, tops[1:]) if b - a > 1e-6)
+    assert rise <= 200.0 + 1e-6  # 단 높이. 계단참으로 오르는 한 단은 두 배가 된다
+    assert len(landings) >= len(boxes) // treads  # 바퀴마다 계단참
+
+
+def test_u_stair_follows_the_up_label_of_the_drawing():
+    """사용자 피드백: 계단이 반대였다. 도면의 UP 글자가 있으면 그 단 묶음, 그 끝에서 오르기 시작한다."""
+    stair = _full_u_stair()
+    stair["up_at"] = (3200, 3300)  # 동쪽 묶음의 북쪽 끝 근처
+    storeys = storeys_of(("F1", _with(stairs=[stair])), ("F2", _box_ir(3600, 8000)))
+    plan_floors(storeys, EXPORT)
+    _, boxes, landings = storeys[0].floor.stairs[0]
+    assert boxes[0].center[0] == pytest.approx(3200, abs=1) and boxes[0].center[1] == pytest.approx(3500, abs=1)
+    _, y0, _, y1 = landings[0][0].bounds
+    assert y1 == pytest.approx(1000, abs=1)  # 남쪽으로 올라 남쪽 끝 너머가 계단참
+
+
+def test_up_label_inside_or_near_a_stair_is_marked():
+    from types import SimpleNamespace
+
+    from cad2bim.building import mark_stair_up
+
+    ir = {"source": {"unit_scale": 1.0}, "origin_offset": [100.0, 0.0], "stairs": [_full_u_stair()]}
+    model = [SimpleNamespace(kind="text", geometry={"text": "UP", "position": (3300.0, 3300.0), "height": 200.0}),
+             SimpleNamespace(kind="text", geometry={"text": "UP", "position": (20000.0, 0.0), "height": 200.0})]
+    assert mark_stair_up(model, ir) == 1 and ir["stairs"][0]["up_at"] == [3200.0, 3300.0]
