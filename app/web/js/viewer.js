@@ -110,6 +110,8 @@ const ELEVATOR_SPEED_MM = 1200; // mm/s
 const ELEVATOR_DOOR_SPEED = 1.2; // 1/s. 다 열리는 데 약 0.8초
 const ELEVATOR_CALL_MM = 1500; // 문 앞 이 거리 안에 서면 카를 부른다
 const CAP_COLOR = '#4b4f56'; // 잘린 면(포셰)
+// 미니맵. 발밑 높이보다 이만큼 위에 있는 층 바닥까지는 그 층으로 본다(계단을 거의 다 오르면 윗층 평면으로 바뀐다).
+const FLOOR_SWITCH = 1.0; // m
 
 export function floorLabel(key) {
   const m = FLOOR.exec(key);
@@ -188,6 +190,7 @@ export class Viewer3D {
     this.person = null;
     this.look = null;
     this.onPersonChange = null;
+    this.onFrame = null; // 한 장면을 그린 뒤 부른다(미니맵 갱신)
 
     const canvas = this.renderer.domElement;
     canvas.addEventListener('pointerdown', (e) => this.onLook(e, 'down'));
@@ -463,6 +466,7 @@ export class Viewer3D {
       this.camera.updateProjectionMatrix();
     }
     this.renderer.render(this.scene, this.camera);
+    this.onFrame?.();
   }
 
   resize() {
@@ -561,6 +565,58 @@ export class Viewer3D {
     this.ground = null;
     this.state = { roof: true, site: true, furniture: true, hiddenFloors: new Set(), cut: null };
     this.cap.visible = false;
+  }
+
+  /** 높이(m)에 있는 사람이 속한 층. 층 바닥이 height + FLOOR_SWITCH 이하인 층 가운데 가장 높은 층이다. */
+  floorAt(height) {
+    const keys = this.floors().filter((key) => this.levels.has(key))
+      .sort((a, b) => this.levels.get(a) - this.levels.get(b));
+    let found = keys[0] ?? null;
+    for (const key of keys) if (this.levels.get(key) <= height + FLOOR_SWITCH) found = key;
+    return found;
+  }
+
+  /**
+   * 사람 시점의 위치와 보는 방향(미니맵용). 사람 시점이 아니면 null.
+   * x·z는 모델 좌표(m), dirX·dirZ는 보는 방향(수평 단위 벡터), hfov는 수평 화각(rad), floor는 서 있는 층.
+   */
+  personPose() {
+    if (!this.person) return null;
+    const { x, y, z } = this.camera.position;
+    const half = Math.atan(Math.tan(THREE.MathUtils.degToRad(this.camera.fov) / 2) * this.camera.aspect);
+    return {
+      x, z, dirX: -Math.sin(this.person.yaw), dirZ: -Math.cos(this.person.yaw), hfov: half * 2,
+      floor: this.floorAt(this.person.ground ?? y - EYE_HEIGHT),
+    };
+  }
+
+  /**
+   * 층 평면(미니맵용). 좌표는 [x, z] m이고 화면에서는 z가 아래쪽이다(도면과 같은 방향).
+   * cuts: 바닥에서 CUT_HEIGHT 위를 수평으로 자른 선(벽·기둥·문·창·난간). 내부 보기와 같은 높이라 문 자리가 뚫려 보인다.
+   * fills: 위에서 내려다본 삼각형(바닥판, 계단, 바닥 구멍으로 보이는 아래층 계단).
+   * bounds: 모든 층을 담는 범위. 층이 바뀌어도 지도 축척과 위치가 같다.
+   */
+  floorPlan(key) {
+    if (!this.model || !this.levels.has(key)) return null;
+    this.model.updateMatrixWorld(true);
+    const keys = this.floors();
+    const box = new THREE.Box3();
+    for (const k of keys) box.expandByObject(this.groups.get(k));
+    const helpers = new Set(this.stencils);
+    const meshesOf = (floor, suffix) => {
+      const found = [];
+      this.groups.get(`${floor}_${suffix}`)?.traverse((obj) => { if (obj.isMesh && !helpers.has(obj)) found.push(obj); });
+      return found;
+    };
+    const height = this.levels.get(key) + CUT_HEIGHT;
+    const cut = (suffix) => meshesOf(key, suffix).flatMap((mesh) => stitchLoops(sectionSegments(mesh, height)));
+    const top = (floor, suffix) => meshesOf(floor, suffix).flatMap((mesh) => topTriangles(mesh));
+    const below = keys[keys.indexOf(key) - 1];
+    return {
+      bounds: { minX: box.min.x, maxX: box.max.x, minZ: box.min.z, maxZ: box.max.z },
+      fills: { stairBelow: below ? top(below, 'Stairs') : [], slab: top(key, 'Slabs'), stair: top(key, 'Stairs') },
+      cuts: { rail: cut('Rails'), window: cut('Windows'), door: cut('Doors'), wall: cut('Walls'), column: cut('Columns') },
+    };
   }
 
   floors() {
@@ -1116,6 +1172,79 @@ function unwrap(list) {
 function isShownTree(obj) {
   for (let o = obj; o; o = o.parent) if (!o.visible) return false;
   return true;
+}
+
+/** 메시의 삼각형 꼭짓점을 세계 좌표로 차례로 넘긴다. */
+function eachTriangle(mesh, visit) {
+  const position = mesh.geometry.getAttribute('position');
+  const index = mesh.geometry.getIndex();
+  const count = index ? index.count : position.count;
+  const v = [new THREE.Vector3(), new THREE.Vector3(), new THREE.Vector3()];
+  for (let i = 0; i + 2 < count; i += 3) {
+    for (let k = 0; k < 3; k += 1) {
+      v[k].fromBufferAttribute(position, index ? index.getX(i + k) : i + k).applyMatrix4(mesh.matrixWorld);
+    }
+    visit(v[0], v[1], v[2]);
+  }
+}
+
+/** 메시를 높이 y의 수평면으로 자른 선분들. [[x, z], [x, z]] */
+function sectionSegments(mesh, y) {
+  const segments = [];
+  eachTriangle(mesh, (a, b, c) => {
+    const points = [];
+    for (const [p, q] of [[a, b], [b, c], [c, a]]) {
+      const dp = p.y - y;
+      const dq = q.y - y;
+      if ((dp < 0) === (dq < 0)) continue;
+      const t = dp / (dp - dq);
+      points.push([p.x + (q.x - p.x) * t, p.z + (q.z - p.z) * t]);
+    }
+    if (points.length === 2) segments.push(points);
+  });
+  return segments;
+}
+
+/** 선분을 끝점(1mm 단위)끼리 이어 닫힌 선으로 만든다. 닫히지 않은 것은 closed가 false다. */
+function stitchLoops(segments) {
+  const keyOf = ([x, z]) => `${Math.round(x * 1000)},${Math.round(z * 1000)}`;
+  const ends = new Map();
+  segments.forEach((segment, i) => segment.forEach((point) => {
+    const key = keyOf(point);
+    if (!ends.has(key)) ends.set(key, []);
+    ends.get(key).push(i);
+  }));
+  const used = new Uint8Array(segments.length);
+  const loops = [];
+  for (let i = 0; i < segments.length; i += 1) {
+    if (used[i]) continue;
+    used[i] = 1;
+    const points = [segments[i][0], segments[i][1]];
+    let closed = false;
+    for (;;) {
+      const tail = keyOf(points[points.length - 1]);
+      const next = ends.get(tail).find((j) => !used[j]);
+      if (next === undefined) {
+        closed = points.length > 2 && keyOf(points[0]) === tail;
+        break;
+      }
+      used[next] = 1;
+      const [a, b] = segments[next];
+      points.push(keyOf(a) === tail ? b : a);
+    }
+    loops.push({ points, closed });
+  }
+  return loops;
+}
+
+/** 위에서 내려다본 삼각형들. 한쪽을 향한 면만 고른다(윗면과 밑면이 겹치면 채우기가 서로 지워진다). [[x, z], [x, z], [x, z]] */
+function topTriangles(mesh) {
+  const triangles = [];
+  eachTriangle(mesh, (a, b, c) => {
+    const area = (b.x - a.x) * (c.z - a.z) - (c.x - a.x) * (b.z - a.z);
+    if (area > 1e-6) triangles.push([[a.x, a.z], [b.x, b.z], [c.x, c.z]]);
+  });
+  return triangles;
 }
 
 function hasAncestor(obj, test) {

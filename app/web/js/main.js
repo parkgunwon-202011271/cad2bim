@@ -6,6 +6,7 @@ import {
 } from './ui/components.js';
 import { PlanViewer } from './ui/plan-viewer.js';
 import { InputHelp } from './ui/input-help.js';
+import { MiniMap } from './ui/minimap.js';
 import { SplitDivider } from './ui/split-divider.js';
 import { Viewer3D, floorLabel } from './viewer.js';
 
@@ -65,11 +66,16 @@ const fullButton = h('button', {
   class: 'c-viewer__action', type: 'button', hidden: true, 'aria-pressed': 'false',
   onClick: () => setFullscreen(!view3d.classList.contains('l-stage__view--full')),
 });
+// 미니맵: 전체화면의 사람 시점에서 서 있는 층의 평면과 현재 위치·시야를 오른쪽 아래에 보여 준다.
+const miniMap = MiniMap({
+  pose: () => viewer.personPose(), plan: (key) => viewer.floorPlan(key), label: (key) => floorLabel(key),
+});
 // 조작 안내와 전체화면 버튼은 뷰어 위에 겹쳐 둔다(뷰어를 더 크게 쓰기 위해).
 const view3d = h('div', { class: 'l-stage__view', 'aria-label': '3D 모델' }, modelTitle, viewTools,
-  h('div', { class: 'c-viewer-frame' }, viewerHost, fullButton, viewerHelp.el));
+  h('div', { class: 'c-viewer-frame' }, viewerHost, fullButton, viewerHelp.el, miniMap.el));
 function setFullscreen(on) {
   view3d.classList.toggle('l-stage__view--full', on);
+  miniMap.setVisible(on && Boolean(viewer.person));
   fullButton.replaceChildren(icon(on ? 'minimize' : 'maximize'));
   fullButton.setAttribute('aria-pressed', String(on));
   fullButton.setAttribute('aria-label', on ? '전체화면 끝내기' : '전체화면으로 보기');
@@ -165,8 +171,10 @@ viewer.onPersonChange = (on) => {
   personButton.textContent = on ? '사람 시점 끝내기' : '사람 시점';
   personButton.setAttribute('aria-pressed', String(on));
   viewerHelp.setPerson(on);
+  miniMap.setVisible(on && view3d.classList.contains('l-stage__view--full'));
   updateModelTitle();
 };
+viewer.onFrame = () => miniMap.update();
 // 엘리베이터 안에서는 층 고르는 법을 보여 준다.
 viewer.onPersonHint = (hint) => {
   if (viewer.person) viewerHelp.setHint(hint || '');
@@ -243,6 +251,7 @@ async function showResult(useSample, took = '') {
     progress.set({ state: 'busy', message: '모델 불러오는 중' });
     const model = await api.getModel(useSample);
     if (!model?.dae) throw new Error('불러올 결과가 없습니다.');
+    miniMap.reset();
     const floors = viewer.load(model.dae);
     viewer.setFurniture(model.furniture);
     viewerEmpty.hidden = true;
@@ -280,6 +289,7 @@ async function resetAll() {
   clearInterval(ticker);
   setFullscreen(false);
   viewer.clear();
+  miniMap.reset();
   viewerEmpty.hidden = false;
   viewerHelp.el.hidden = true;
   fullButton.hidden = true;
