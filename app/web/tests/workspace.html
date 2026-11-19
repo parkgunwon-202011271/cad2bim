@@ -1,0 +1,140 @@
+<!doctype html>
+<html lang="ko">
+<meta charset="utf-8">
+<title>Workspace UI checks</title>
+<script type="importmap">
+{"imports":{"three":"../vendor/three/three.module.min.js","three/addons/":"../vendor/three/addons/"}}
+</script>
+<pre id="result">RUNNING</pre>
+<iframe src="../?sample" style="width:1100px;height:720px"></iframe>
+<script type="module">
+  import * as THREE from 'three';
+  import { Viewer3D } from '../js/viewer.js';
+  const frame = document.querySelector('iframe');
+  const result = document.querySelector('#result');
+  const assert = (ok, message) => { if (!ok) throw new Error(message); };
+  try {
+    await new Promise((resolve) => frame.addEventListener('load', resolve, { once: true }));
+    const doc = frame.contentDocument;
+    const tab = (name) => [...doc.querySelectorAll('[role="tab"]')].find((el) => el.textContent === name);
+    const views = doc.querySelectorAll('.l-stage__view');
+    assert(tab('분할'), '분할 탭이 있어야 합니다');
+    tab('분할').click();
+    assert([...views].every((el) => !el.hidden), '분할에서 두 뷰가 보여야 합니다');
+    assert(tab('분할').getAttribute('aria-selected') === 'true', '선택한 모드가 표시되어야 합니다');
+    tab('2D 도면').click();
+    assert(views[0].hidden && !views[1].hidden, '2D에서는 도면만 보여야 합니다');
+    tab('3D 모델').click();
+    assert(!views[0].hidden && views[1].hidden, '3D에서는 모델만 보여야 합니다');
+    const toggle = doc.querySelector('[aria-controls="settings-sidebar"]');
+    const sidebar = doc.querySelector('#settings-sidebar');
+    toggle.click();
+    assert(sidebar.hidden && toggle.getAttribute('aria-expanded') === 'false', '패널 접기 상태가 일치해야 합니다');
+    [...doc.querySelectorAll('.c-rail__button')].find((el) => el.textContent === '도면').click();
+    assert(!sidebar.hidden && toggle.getAttribute('aria-expanded') === 'true', '패널을 다시 펼칠 수 있어야 합니다');
+    const rail = [...doc.querySelectorAll('.c-rail__button')];
+    rail[1].click();
+    assert(!doc.querySelector('#sidebar-display').hidden && doc.querySelector('#sidebar-documents').hidden, '표시 메뉴를 열어야 합니다');
+    rail[2].click();
+    assert(!doc.querySelector('#sidebar-results').hidden, '결과 메뉴를 열어야 합니다');
+    rail[0].click();
+    assert(views[0].querySelector('.c-view-tools button'), '3D 도구는 3D 뷰 안에 있어야 합니다');
+    tab('분할').click();
+    const loaded = () => [...doc.querySelectorAll('.c-progress__text--done')].some((el) => el.textContent.includes('3개 층'));
+    if (!loaded()) await new Promise((resolve, reject) => {
+      const observer = new MutationObserver(() => { if (loaded()) { clearTimeout(timer); observer.disconnect(); resolve(); } });
+      const timer = setTimeout(() => { observer.disconnect(); reject(new Error('샘플 로드 시간 초과')); }, 15000);
+      observer.observe(doc.body, { subtree: true, childList: true, attributes: true, characterData: true });
+    });
+    assert([...views].every((el) => !el.hidden), '모델 로드 후에도 분할을 유지해야 합니다');
+    assert(doc.querySelectorAll('.c-plan-viewer__chip').length === 3, '샘플 도면 3개를 유지해야 합니다');
+    assert(doc.querySelector('.c-view-tools [role="group"]'), '층 단면 도구가 있어야 합니다');
+    doc.querySelectorAll('.c-drawing-list__item')[1].click();
+    assert(doc.querySelectorAll('.c-plan-viewer__chip')[1].getAttribute('aria-pressed') === 'true', '원본 도면 목록과 도면 탭이 연결되어야 합니다');
+    doc.querySelectorAll('.c-plan-viewer__chip')[0].click();
+    assert(doc.querySelectorAll('.c-drawing-list__item')[0].getAttribute('aria-pressed') === 'true', '도면 탭에서 선택해도 왼쪽 목록이 갱신되어야 합니다');
+    const firstTree = doc.querySelector('.c-floor-tree');
+    firstTree.open = true;
+    assert(firstTree.querySelectorAll('input').length > 1, '실제 모델의 층별 요소가 있어야 합니다');
+    const caption = doc.querySelector('.c-pane-title--3d');
+    assert(caption?.textContent.includes('전체 건물'), '3D 범위를 표시해야 합니다');
+    const floorVisibility = sidebar.querySelector('input[type="checkbox"]');
+    floorVisibility.click();
+    assert(caption.textContent.includes('표시 층') && !caption.textContent.includes('전체 건물'), '숨긴 층이 있으면 전체 건물로 표시하면 안 됩니다');
+    floorVisibility.click();
+    const cut = doc.querySelector('.c-inside-controls [role="group"]');
+    [...cut.querySelectorAll('button')].find((el) => el.textContent === '2층').click();
+    assert(caption.textContent.includes('2층') && caption.textContent.includes('단면'), '선택한 단면층을 표시해야 합니다');
+    doc.querySelectorAll('.c-plan-viewer__chip')[1].click();
+    assert(doc.querySelector('.c-pane-title--2d').textContent.includes('3층'), '원도면 제목이 선택을 따라야 합니다');
+    assert(caption.textContent.includes('2층'), '원도면 선택이 3D 단면을 임의 변경하면 안 됩니다');
+    const separator = doc.querySelector('[role="separator"]');
+    assert(separator && !separator.hidden, '분할 조절 경계가 있어야 합니다');
+    const before = Number(separator.getAttribute('aria-valuenow'));
+    const direction = separator.getAttribute('aria-orientation') === 'vertical' ? 'ArrowRight' : 'ArrowDown';
+    separator.dispatchEvent(new KeyboardEvent('keydown', { key: direction, bubbles: true }));
+    assert(Number(separator.getAttribute('aria-valuenow')) > before, '키보드로 분할 비율을 바꿀 수 있어야 합니다');
+    separator.dispatchEvent(new KeyboardEvent('keydown', { key: 'Home', bubbles: true }));
+    assert(Number(separator.getAttribute('aria-valuenow')) === 25, '분할 최소 비율을 지켜야 합니다');
+    separator.dispatchEvent(new KeyboardEvent('keydown', { key: 'End', bubbles: true }));
+    assert(Number(separator.getAttribute('aria-valuenow')) === 75, '분할 최대 비율을 지켜야 합니다');
+    separator.dispatchEvent(new MouseEvent('dblclick', { bubbles: true }));
+    assert(Number(separator.getAttribute('aria-valuenow')) === 50, '더블클릭으로 반반 배치를 복원해야 합니다');
+    const help = doc.querySelector('.c-input-help');
+    assert(help?.querySelectorAll('svg').length === 3 && help.querySelector('kbd'), '마우스 그림과 키캡을 안내해야 합니다');
+    help.querySelector('summary').click();
+    assert(!help.open, '조작 안내를 접을 수 있어야 합니다');
+    const person = [...doc.querySelectorAll('button')].find((el) => el.textContent === '사람 시점');
+    person.click();
+    assert(person.getAttribute('aria-pressed') === 'true' && help.textContent.includes('Esc'), '사람 시점 상태와 종료 키를 안내해야 합니다');
+    assert(caption.textContent.includes('사람 시점'), '사람 시점에서는 단면 적용 중으로 표시하면 안 됩니다');
+    person.click();
+    assert(person.getAttribute('aria-pressed') === 'false' && caption.textContent.includes('단면'), '사람 시점 종료 후 단면 상태로 복귀해야 합니다');
+    assert(!help.open, '모드를 바꿔도 접어 둔 안내를 유지해야 합니다');
+    person.click();
+    [...doc.querySelectorAll('button')].find((el) => el.textContent === '샘플 보기').click();
+    await new Promise((resolve, reject) => {
+      const observer = new MutationObserver(() => {
+        const finished = doc.querySelector('.c-progress__text--done, .c-progress__text--error');
+        if (finished) { clearTimeout(timer); observer.disconnect(); resolve(); }
+      });
+      const timer = setTimeout(() => { observer.disconnect(); reject(new Error('모델 재로드 시간 초과')); }, 15000);
+      observer.observe(doc.body, { subtree: true, childList: true, attributes: true });
+    });
+    assert(!doc.querySelector('.c-progress__text--error'), '단면을 고른 사람 시점에서 모델을 다시 열어도 오류가 없어야 합니다');
+    assert(person.getAttribute('aria-pressed') === 'false' && caption.textContent.includes('전체 건물'), '재로드 후 이전 사람 시점과 단면을 초기화해야 합니다');
+    const floor = new THREE.Mesh(new THREE.BoxGeometry(10, 10, 10));
+    const viewer = Object.assign(Object.create(Viewer3D.prototype), {
+      model: new THREE.Group(), groups: new Map([['F1', floor]]), state: { cut: null },
+      camera: new THREE.PerspectiveCamera(),
+      controls: { target: new THREE.Vector3(), update() {} },
+      sun: { shadow: { camera: { updateProjectionMatrix() {} } }, position: new THREE.Vector3(), target: { position: new THREE.Vector3() } },
+    });
+    viewer.model.add(floor);
+    for (const aspect of [0.5, 2]) {
+      viewer.camera.aspect = aspect;
+      for (const frame of [() => viewer.fit(), () => viewer.frameObject(floor, Math.PI / 4, false)]) {
+        frame();
+        const radius = new THREE.Box3().setFromObject(floor).getBoundingSphere(new THREE.Sphere()).radius;
+        const angularRadius = Math.asin(radius / viewer.camera.position.distanceTo(viewer.controls.target));
+        const vertical = THREE.MathUtils.degToRad(viewer.camera.fov) / 2;
+        const horizontal = Math.atan(Math.tan(vertical) * aspect);
+        assert(angularRadius < Math.min(vertical, horizontal), `종횡비 ${aspect}에서 모델이 화면 안에 들어와야 합니다`);
+      }
+    }
+    frame.style.width = '800px';
+    await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+    assert(frame.contentWindow.getComputedStyle(doc.querySelector('.l-stage__body')).flexDirection === 'column', '좁은 화면에서 분할을 세로로 배치해야 합니다');
+    assert(separator.getAttribute('aria-orientation') === 'horizontal', '세로 배치에서 구분선 방향도 바뀌어야 합니다');
+    frame.style.width = '1100px';
+    await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+    assert(frame.contentWindow.getComputedStyle(doc.querySelector('.l-stage__body')).flexDirection === 'row', '넓은 화면에서 좌우 분할로 복원해야 합니다');
+    floor.geometry.dispose();
+    floor.material.dispose();
+    result.textContent = 'PASS: modes, sidebar, captions, split resize, input help, person mode, sample load, camera fit';
+  } catch (error) {
+    result.textContent = `FAIL: ${error.message}`;
+    throw error;
+  }
+</script>
+</html>

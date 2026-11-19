@@ -1,0 +1,165 @@
+<!doctype html>
+<html lang="ko">
+<meta charset="utf-8">
+<base href="../">
+<title>Viewer actual-state cross-check</title>
+<script type="importmap">
+{"imports":{"three":"./vendor/three/three.module.min.js","three/addons/":"./vendor/three/addons/"}}
+</script>
+<pre id="result">RUNNING</pre>
+<div id="viewer" style="width:640px;height:420px"></div>
+<script type="module">
+import * as THREE from 'three';
+import { Viewer3D } from './js/viewer.js';
+import { loadSample } from './js/api.js';
+const result = document.querySelector('#result');
+const checks = [];
+const check = (name, fn) => { try { fn(); checks.push({name, pass:true}); } catch(e) { checks.push({name, pass:false, error:e.message}); } };
+const assert = (ok, msg) => { if(!ok) throw new Error(msg); };
+try {
+ const sample = await loadSample();
+ const viewer = new Viewer3D(document.querySelector('#viewer'));
+ viewer.renderer.setAnimationLoop(null);
+ const floors = viewer.load(sample.dae);
+ viewer.setFurniture(sample.furniture);
+ const shown = (obj) => { for(let p=obj;p;p=p.parent) if(!p.visible) return false; return true; };
+ check('actual model and 3 floors',()=>assert(floors.length===3 && viewer.meshes.length>0 && viewer.walkable.length>0,'missing model geometry'));
+ check('floor off/on changes scene',()=>{
+  viewer.setFloorVisible('F1',false); assert(!shown(viewer.groups.get('F1_Walls')),'F1 still visible');
+  viewer.setFloorVisible('F1',true); assert(shown(viewer.groups.get('F1_Walls')),'F1 not restored');
+ });
+ check('roof off/on changes all roof groups',()=>{
+  const roofs=[...viewer.groups].filter(([name])=>name.endsWith('_Roofs')); assert(roofs.length>0,'sample missing roofs');
+  viewer.setRoofVisible(false); assert(roofs.every(([,o])=>!shown(o)),'roof still visible');
+  viewer.setRoofVisible(true); assert(roofs.every(([,o])=>shown(o)),'roof not restored');
+ });
+ check('site off/on changes scene',()=>{
+  const site=['SITE_Ground','SITE_Surroundings','SITE_Roads','SITE_Decks','SITE_Trees'].map(name=>[name,viewer.groups.get(name)]).filter(([,obj])=>obj); assert(site.length>0,'sample missing site');
+  viewer.setSiteVisible(false); assert(site.every(([,o])=>!shown(o)),'site still visible');
+  viewer.setSiteVisible(true); assert(site.some(([,o])=>shown(o)),'site not restored');
+ });
+ check('furniture off/on changes geometry',()=>{
+  assert(viewer.furniture.length>0,'sample missing furniture');
+  viewer.setFurnitureVisible(false); assert(viewer.furniture.every(o=>!shown(o)),'furniture still visible');
+  viewer.setFurnitureVisible(true); assert(viewer.furniture.some(o=>shown(o)),'furniture not restored');
+ });
+ check('classification/architecture switches real materials',()=>{
+  const mesh=viewer.meshes.find(m=>m.building).mesh;
+  viewer.setStyle('class'); assert(mesh.material===mesh.userData.mats.class,'class material not applied');
+  viewer.setStyle('arch'); assert(mesh.material===mesh.userData.mats.arch,'arch material not restored');
+ });
+ check('cut shows one floor and real clipping/caps',()=>{
+  viewer.setCut('F2'); viewer.fly=null;
+  assert(viewer.groups.get('F2').visible && !viewer.groups.get('F1').visible && !viewer.groups.get('F3').visible,'wrong cut floors');
+  assert(viewer.cap.visible && viewer.stencils.length>0,'cut cap missing');
+  assert([...viewer.clipped].every(m=>m.clippingPlanes?.[0]===viewer.cutPlane),'clipping planes missing');
+ });
+ check('selected cut floor can be hidden',()=>{
+  viewer.setFloorVisible('F2',false); assert(!shown(viewer.groups.get('F2_Walls')),'hidden cut floor still visible');
+ });
+ viewer.setFloorVisible('F2',true);
+ check('element toggles restore cut caps after changing views',()=>{
+  viewer.setCut(null);
+  viewer.setGroupVisible('F2_Walls',false);
+  viewer.setCut('F2');
+  const walls=viewer.groups.get('F2_Walls');
+  assert(!shown(walls),'walls still visible');
+  viewer.setGroupVisible('F2_Walls',true);
+  assert(shown(walls) && viewer.stencils.some(helper=>{for(let p=helper.parent;p;p=p.parent) if(p===walls)return true;return false;}),'wall cut caps not rebuilt');
+ });
+ check('person entry temporarily clears cut then Esc restores it',()=>{
+  viewer.setCut('F2');
+  viewer.enterPerson(); viewer.fly=null;
+  assert(viewer.person && !viewer.controls.enabled && viewer.activeCut()===null && !viewer.cap.visible,'person entry state incorrect');
+  viewer.onKey(new KeyboardEvent('keydown',{code:'Escape'}),true);
+  assert(!viewer.person && viewer.controls.enabled && viewer.activeCut()==='F2' && viewer.cap.visible,'Esc did not restore cut');
+  viewer.fly=null;
+ });
+ check('WASD/QE moves actual camera; typing/hidden viewer ignored',()=>{
+  viewer.setCut(null); viewer.fly=null; viewer.fit();
+  const pos=viewer.camera.position.clone(); const target=viewer.controls.target.clone();
+  viewer.onKey(new KeyboardEvent('keydown',{code:'KeyW'}),true); viewer.walk(.1);
+  viewer.onKey(new KeyboardEvent('keyup',{code:'KeyW'}),false);
+  const delta=viewer.camera.position.clone().sub(pos);
+  assert(delta.length()>0 && viewer.controls.target.clone().sub(target).distanceTo(delta)<1e-6,'W did not move camera and target together');
+  const y=viewer.camera.position.y;
+  viewer.onKey(new KeyboardEvent('keydown',{code:'KeyE'}),true); viewer.walk(.1); viewer.keys.clear();
+  assert(viewer.camera.position.y>y,'E did not move up');
+  const input=document.createElement('input');
+  viewer.onKey({code:'KeyW',shiftKey:false,target:input,preventDefault(){}},true);
+  assert(!viewer.keys.has('KeyW'),'typing triggered camera movement');
+  viewer.container.hidden=true;
+  viewer.onKey(new KeyboardEvent('keydown',{code:'KeyW'}),true);
+  assert(!viewer.keys.has('KeyW'),'hidden viewer captured movement'); viewer.container.hidden=false;
+ });
+ check('automatic rotation changes camera only when enabled',()=>{
+  viewer.fly=null; const before=viewer.camera.position.clone(); viewer.setAutoRotate(true); viewer.controls.update(1);
+  assert(before.distanceTo(viewer.camera.position)>0,'auto rotate not moving');
+  viewer.setAutoRotate(false); assert(!viewer.controls.autoRotate,'auto rotate not stopped');
+ });
+ check('orbit wheel changes actual camera distance',()=>{
+  viewer.setCut(null);viewer.fly=null;viewer.fit();viewer.controls.enableDamping=false;viewer.controls.update();
+  const before=viewer.camera.position.distanceTo(viewer.controls.target);
+  viewer.renderer.domElement.dispatchEvent(new WheelEvent('wheel',{deltaY:120,clientX:320,clientY:210,cancelable:true}));
+  viewer.controls.update();
+  assert(Math.abs(viewer.camera.position.distanceTo(viewer.controls.target)-before)>.01,'orbit wheel did not zoom');
+  viewer.controls.enableDamping=true;
+ });
+ check('right-pointer drag pans camera and target together',()=>{
+  viewer.fit();viewer.controls.enableDamping=false;viewer.controls.update();
+  const canvas=viewer.renderer.domElement;
+  const capture=canvas.setPointerCapture,release=canvas.releasePointerCapture;
+  // Synthetic pointers have no browser pointer capture; keep the real OrbitControls handlers.
+  canvas.setPointerCapture=()=>{};canvas.releasePointerCapture=()=>{};
+  const before=viewer.camera.position.clone(),target=viewer.controls.target.clone();
+  try {
+   const event=(type,x,y)=>new PointerEvent(type,{pointerId:41,pointerType:'mouse',button:2,buttons:type==='pointerup'?0:2,clientX:x,clientY:y,bubbles:true});
+   canvas.dispatchEvent(event('pointerdown',200,150));
+   canvas.dispatchEvent(event('pointermove',250,175));
+   canvas.dispatchEvent(event('pointerup',250,175));
+   viewer.controls.update();
+   const delta=viewer.camera.position.clone().sub(before);
+   assert(delta.length()>.01 && viewer.controls.target.clone().sub(target).distanceTo(delta)<.001,'right drag did not pan camera and target');
+  } finally {canvas.setPointerCapture=capture;canvas.releasePointerCapture=release;viewer.controls.enableDamping=true;}
+ });
+ check('person wheel changes field of view',()=>{
+  viewer.enterPerson(); viewer.fly=null; const before=viewer.person.fov;
+  viewer.renderer.domElement.dispatchEvent(new WheelEvent('wheel',{deltaY:100,cancelable:true}));
+  assert(viewer.person.fov>before,'person zoom not applied'); viewer.leavePerson();
+ });
+ check('collision prevents crossing a real Three.js wall',()=>{
+  const old=viewer.obstacles;
+  const wall=new THREE.Mesh(new THREE.BoxGeometry(.2,3,10),new THREE.MeshBasicMaterial({side:THREE.DoubleSide}));
+  wall.position.set(1,1.5,0);wall.updateMatrixWorld(true);viewer.obstacles=[wall];
+  try {
+   const blocked=viewer.collide(new THREE.Vector3(0,1.6,0),new THREE.Vector3(1,0,0),0);
+   assert(Math.abs(blocked.x)<.01,'walk crossed wall');
+   wall.visible=false;
+   const allowed=viewer.collide(new THREE.Vector3(0,1.6,0),new THREE.Vector3(1,0,0),0);
+   assert(allowed.x>.9,'hidden wall still blocks movement');
+  } finally {viewer.obstacles=old;wall.geometry.dispose();wall.material.dispose();}
+ });
+ check('sample elevator floor keys carry camera to target level',()=>{
+  viewer.setCut(null);viewer.enterPerson();viewer.fly=null;
+  const e=viewer.elevators.find(e=>e.floors.length>1);assert(e,'sample has no multi-floor elevator');
+  const center=e.polygon.reduce((c,p)=>c.add(p),new THREE.Vector2()).divideScalar(e.polygon.length);
+  viewer.camera.position.set(center.x/1000,(e.z+50)/1000+1.6,-center.y/1000);
+  viewer.person.ground=(e.z+50)/1000;
+  assert(viewer.insideCar(e),'camera not inside car');
+  const key=e.floors[e.floors.length-1];
+  assert(viewer.pressElevator('Digit'+key.slice(1)) && e.target===key,'floor number ignored');
+  for(let i=0;i<300;i++)viewer.updateElevators(.1);
+  assert(Math.abs(e.z-e.levels[key])<1,'car did not reach target');
+  assert(Math.abs(viewer.camera.position.y-((e.levels[key]+50)/1000+1.6))<.01,'camera did not ride car');
+  assert(e.doors[key]?.open>.9,'landing doors did not open');
+  assert(viewer.pressElevator('PageDown'),'PageDown not accepted');viewer.leavePerson();
+ });
+ check('reload after hidden floors, cut and person resets model state',()=>{
+  viewer.setCut('F2'); viewer.enterPerson(); viewer.load(sample.dae); viewer.setFurniture(sample.furniture);
+  assert(!viewer.person && !viewer.state.cut && !viewer.state.hiddenFloors.size && viewer.floors().every(k=>shown(viewer.groups.get(k))),'reload state not reset');
+ });
+ viewer.renderer.render(viewer.scene,viewer.camera);
+ result.textContent=JSON.stringify({passed:checks.filter(c=>c.pass).length,failed:checks.filter(c=>!c.pass).length,checks},null,2);
+} catch(e) { result.textContent='ERROR: '+e.stack; throw e; }
+</script>
+</html>

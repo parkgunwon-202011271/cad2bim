@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="ko">
+<meta charset="utf-8">
+<title>Desktop bridge contract checks</title>
+<pre id="result">RUNNING</pre>
+<iframe style="width:1100px;height:720px"></iframe>
+<script type="module">
+const frame=document.querySelector('iframe');
+const result=document.querySelector('#result');
+const assert=(ok,msg)=>{if(!ok)throw new Error(msg);};
+const waitFor=(fn,timeout=15000)=>new Promise((resolve,reject)=>{
+ const end=performance.now()+timeout;
+ function tick(){if(fn())return resolve();if(performance.now()>end)return reject(new Error('condition timeout'));requestAnimationFrame(tick);}tick();
+});
+try {
+ const [dae,meta,furniture]=await Promise.all([
+  fetch('../sample/building.dae').then(r=>r.text()),fetch('../sample/summary.json').then(r=>r.json()),fetch('../sample/furniture.json').then(r=>r.json())]);
+ const model={dae,summary:meta.summary,furniture,plans:meta.plans.map(p=>({name:p.name,src:new URL('../sample/'+p.file,location.href).href}))};
+ const ready=new Promise(resolve=>frame.addEventListener('load',resolve,{once:true}));
+ frame.srcdoc=`<!doctype html><html lang="ko"><head><base href="${new URL('../',location.href).href}"><link rel="stylesheet" href="css/tokens.css"><link rel="stylesheet" href="css/app.css"><script type="importmap">{"imports":{"three":"./vendor/three/three.module.min.js","three/addons/":"./vendor/three/addons/"}}<\/script><script>
+ window.calls=[];window.nextModel={};window.pywebview={api:{
+ choose_folder:async()=>{window.calls.push('choose_folder');window.cad2bimEvent({type:'started',count:2});window.cad2bimEvent({type:'progress',stage:'read',done:1,total:2});return true;},
+ open_result:async()=>{window.calls.push('open_result');window.cad2bimEvent({type:'done'});return true;},
+ get_model:async()=>{window.calls.push('get_model');return window.nextModel;}
+ }};<\/script></head><body><div id="app"></div><script type="module" src="js/main.js"><\/script></body></html>`;
+ await ready;
+ const doc=frame.contentDocument,win=frame.contentWindow;
+ await waitFor(()=>doc.querySelector('.c-toolbar'));
+ const button=name=>[...doc.querySelectorAll('button')].find(b=>b.textContent===name);
+ button('도면 폴더 열기').click();
+ assert(win.calls.includes('choose_folder'),'folder button did not call bridge');
+ assert(doc.querySelector('.c-progress__text').textContent.includes('1/2'),'read progress missing');
+ assert(!doc.querySelector('.c-progress__bar').hidden,'progress bar hidden');
+ win.cad2bimEvent({type:'error',message:'검증용 변환 실패'});
+ assert(doc.querySelector('.c-progress__text--error').textContent.includes('검증용 변환 실패'),'error status missing');
+ assert(!doc.querySelector('.c-toast').hidden,'error toast missing');
+ win.nextModel=model;
+ button('결과 열기').click();
+ await waitFor(()=>doc.querySelector('.c-progress__text--done'));
+ assert(win.calls.includes('open_result')&&win.calls.includes('get_model'),'result bridge not called');
+ assert(doc.querySelectorAll('.c-plan-viewer__chip').length===model.plans.length,'model plans not rendered');
+ assert(!doc.querySelector('.c-progress__text--error'),'error did not recover');
+ win.nextModel={};button('결과 열기').click();
+ await waitFor(()=>doc.querySelector('.c-progress__text--error'));
+ assert(doc.querySelector('.c-progress__text--error').textContent.includes('불러올 결과가 없습니다'),'empty result not handled');
+ win.nextModel={dae,summary:null,plans:[],furniture:null};button('결과 열기').click();
+ await waitFor(()=>doc.querySelector('.c-progress__text--done'));
+ assert(!doc.querySelectorAll('.c-plan-viewer__chip').length,'missing plans not cleared');
+ assert(doc.querySelector('.c-pane-title--2d').textContent.includes('선택 없음'),'empty plan title stale');
+ assert(!doc.querySelector('.c-progress__text--error'),'optional metadata prevented model load');
+ result.textContent='PASS: bridge folder/result/get_model calls, progress, error toast, recovery, empty result, missing optional metadata (controlled JS bridge; native dialog/conversion not tested)';
+} catch(e){result.textContent='FAIL: '+e.message;throw e;}
+</script>
+</html>

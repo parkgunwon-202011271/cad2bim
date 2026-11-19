@@ -472,6 +472,8 @@ export class Viewer3D {
 
   /** DAE 글자를 읽어 장면에 올린다. 층 목록을 돌려준다. */
   load(daeText) {
+    // 사람 시점 종료는 기존 층의 단면을 복원하므로 그룹을 비우기 전에 끝낸다.
+    if (this.person) this.leavePerson();
     if (this.model) this.scene.remove(this.model);
     this.clearStencils();
     // ColladaLoader가 단위(mm → m)와 Z-위 축을 맞춰 준다.
@@ -485,7 +487,6 @@ export class Viewer3D {
     this.furniture = [];
     this.elevators = [];
     this.ground = null;
-    if (this.person) this.leavePerson();
     const archCache = new Map();
     this.edgeMaterials = {
       building: new THREE.LineBasicMaterial({ color: EDGE_COLOR }),
@@ -556,7 +557,14 @@ export class Viewer3D {
   setFloorVisible(key, visible) {
     if (visible) this.state.hiddenFloors.delete(key);
     else this.state.hiddenFloors.add(key);
-    this.applyVisibility();
+    this.applyCut();
+  }
+
+  setGroupVisible(name, visible) {
+    const group = this.groups.get(name);
+    if (!group) return;
+    group.visible = visible;
+    this.applyCut();
   }
 
   setRoofVisible(visible) {
@@ -893,7 +901,7 @@ export class Viewer3D {
     for (const [name, obj] of this.groups) {
       if (cut) {
         // 내부 보기는 그 층만 보여 준다. 다른 층과 대지는 숨긴다.
-        if (FLOOR.test(name)) obj.visible = name === cut;
+        if (FLOOR.test(name)) obj.visible = name === cut && !this.state.hiddenFloors.has(name);
         else if (name === 'SITE' || name.startsWith('SITE_')) obj.visible = false;
         else if (name.endsWith('_Roofs')) obj.visible = this.state.roof;
         continue;
@@ -938,7 +946,9 @@ export class Viewer3D {
     if (obj && this.state.cut) box.max.y = Math.min(box.max.y, this.cutPlane.constant);
     const center = box.getCenter(new THREE.Vector3());
     const radius = box.getBoundingSphere(new THREE.Sphere()).radius || 10;
-    const distance = radius / Math.sin(THREE.MathUtils.degToRad(FOV_OUTSIDE) / 2) * 1.05;
+    const verticalHalfFov = THREE.MathUtils.degToRad(FOV_OUTSIDE) / 2;
+    const halfFov = Math.atan(Math.tan(verticalHalfFov) * Math.min(1, this.camera.aspect));
+    const distance = radius / Math.sin(halfFov) * 1.05;
     const offset = this.camera.position.clone().sub(this.controls.target);
     const azimuth = offset.lengthSq() > 0 ? Math.atan2(offset.x, offset.z) : START_AZIMUTH;
     const dir = new THREE.Vector3(
@@ -969,7 +979,9 @@ export class Viewer3D {
     const center = box.getCenter(new THREE.Vector3());
     const radius = box.getBoundingSphere(new THREE.Sphere()).radius || 10;
     this.radius = radius;
-    const distance = radius / Math.sin(THREE.MathUtils.degToRad(FOV_OUTSIDE) / 2) * 1.05;
+    const verticalHalfFov = THREE.MathUtils.degToRad(FOV_OUTSIDE) / 2;
+    const halfFov = Math.atan(Math.tan(verticalHalfFov) * Math.min(1, this.camera.aspect));
+    const distance = radius / Math.sin(halfFov) * 1.05;
     const dir = new THREE.Vector3(
       Math.cos(START_ELEVATION) * Math.sin(START_AZIMUTH),
       Math.sin(START_ELEVATION),

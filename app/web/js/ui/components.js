@@ -9,6 +9,7 @@ export function Button({ label, variant = 'secondary', size, onClick, disabled }
 
 export function Toolbar({ title, hint, actions = [] }) {
   return h('header', { class: 'c-toolbar' },
+    h('img', { class: 'c-toolbar__icon', src: 'assets/cad2bim-mark.png', alt: '', width: '32', height: '32' }),
     h('span', { class: 'c-toolbar__title' }, title),
     hint && h('span', { class: 'c-toolbar__hint' }, hint),
     h('span', { class: 'c-toolbar__spacer' }),

@@ -5,6 +5,8 @@ import {
   Button, DropOverlay, Panel, ProgressPanel, Segmented, StatList, Tabs, Toast, ToggleList, Toolbar,
 } from './ui/components.js';
 import { PlanViewer } from './ui/plan-viewer.js';
+import { InputHelp } from './ui/input-help.js';
+import { SplitDivider } from './ui/split-divider.js';
 import { Viewer3D, floorLabel } from './viewer.js';
 
 const root = document.getElementById('app');
@@ -14,15 +16,13 @@ const toolbar = Toolbar({
   title: 'cad2bim',
   hint: 'CAD 평면도 → 층별 3D 모델',
   actions: [
-    Button({ label: '샘플 보기', variant: 'ghost', onClick: () => showResult(true) }),
     Button({ label: '결과 열기', onClick: () => api.openResult() }),
     Button({ label: '도면 폴더 열기', variant: 'primary', onClick: () => api.chooseFolder() }),
   ],
 });
 
 const progress = ProgressPanel();
-const progressPanel = Panel({ title: '진행 상황', children: [progress.el] });
-const layersPanel = Panel({ title: '표시', children: [h('div', { class: 'c-panel__empty' }, '모델을 불러오면 층이 보입니다.')] });
+const layersPanel = Panel({ title: '층 · 요소', children: [h('div', { class: 'c-panel__empty' }, '모델을 불러오면 층이 보입니다.')] });
 const autoRotate = ToggleList({
   items: [{ key: 'rotate', label: '자동 회전', checked: false }],
   onChange: (_, on) => viewer.setAutoRotate(on),
@@ -35,49 +35,103 @@ const styleSwitch = Segmented({
 });
 // 사람 시점: 보던 자리의 바닥에 눈높이로 서서 걷는다. 다시 누르거나 Esc로 나온다.
 const personButton = Button({
-  label: '사람 시점', variant: 'primary', size: 'small',
+  label: '사람 시점', size: 'small',
   onClick: () => (viewer.person ? viewer.exitPerson() : viewer.enterPerson()),
 });
-const viewPanel = Panel({
-  title: '보기',
-  children: [styleSwitch.el, autoRotate, h('div', { class: 'c-panel__row' },
-    personButton,
-    Button({ label: '시점 초기화', size: 'small', onClick: () => viewer.fit() }))],
-});
-const insidePanel = Panel({ title: '내부 보기', children: [h('div', { class: 'c-panel__empty' }, '모델을 불러오면 층을 고를 수 있습니다.')] });
+personButton.setAttribute('aria-pressed', 'false');
+let cutFloor = null;
+const modelTitle = h('div', { class: 'c-pane-title c-pane-title--3d', 'aria-live': 'polite' }, '3D · 모델 없음');
+const insideControls = h('div', { class: 'c-view-tools__row c-inside-controls', hidden: true });
+const viewTools = h('div', { class: 'c-view-tools', 'aria-label': '3D 보기 도구' },
+  h('div', { class: 'c-view-tools__row' }, styleSwitch.el,
+    personButton, Button({ label: '시점 초기화', size: 'small', onClick: () => viewer.fit() })),
+  insideControls,
+);
 const statsPanel = Panel({ title: '결과 요약', children: [h('div', { class: 'c-panel__empty' }, '-')] });
 
 const viewerHost = h('div', { class: 'c-viewer' });
 const viewerEmpty = h('div', { class: 'c-viewer__empty' },
   h('strong', {}, '도면을 여기로 끌어다 놓으세요'),
   'DWG 폴더 하나, 또는 DWG·DXF 파일 여러 개');
-const ORBIT_HELP = 'W·A·S·D: 이동 · Q·E: 아래·위 · Shift: 빠르게 · 드래그: 회전 · 휠: 확대 · 오른쪽 드래그: 옮기기';
-const PERSON_HELP = '사람 시점 · W·A·S·D: 걷기 · Shift: 뛰기 · 드래그: 둘러보기 · 휠: 시야 넓히기·좁히기 · Esc: 나가기';
-const viewerHelp = h('div', { class: 'c-viewer__help', hidden: true }, ORBIT_HELP);
-viewerHost.append(viewerEmpty, viewerHelp);
-const view3d = h('div', { class: 'l-stage__view' }, viewerHost);
+const viewerHelp = InputHelp();
+viewerHost.append(viewerEmpty);
+const view3d = h('div', { class: 'l-stage__view', 'aria-label': '3D 모델' }, modelTitle, viewTools,
+  h('div', { class: 'c-viewer-frame' }, viewerHost), viewerHelp.el);
 const plans = PlanViewer();
 const view2d = h('div', { class: 'l-stage__view', hidden: true }, plans.el);
 const tabs = Tabs({
-  tabs: [{ key: '3d', label: '3D 모델' }, { key: '2d', label: '2D 도면' }],
+  tabs: [{ key: '3d', label: '3D 모델' }, { key: '2d', label: '2D 도면' }, { key: 'split', label: '분할' }],
   active: '3d',
   onChange: (key) => {
-    view3d.hidden = key !== '3d';
-    view2d.hidden = key !== '2d';
-    if (key === '2d') plans.fit();
+    view3d.hidden = key === '2d';
+    view2d.hidden = key === '3d';
+    stageBody.classList.toggle('l-stage__body--split', key === 'split');
+    divider.hidden = key !== 'split';
+    split.refresh();
+    if (key !== '2d') {
+      viewer.resize();
+      if (!viewer.person) viewer.fit();
+    }
+    if (key !== '3d') plans.fit();
   },
 });
+const stageBody = h('div', { class: 'l-stage__body' }, view3d, view2d);
+const split = SplitDivider(stageBody, view3d, view2d);
+const divider = split.el;
+view2d.before(divider);
+const icon = (name) => h('img', { src: `assets/icons/${name}.svg`, alt: '', width: '24', height: '24' });
+const projectTitle = h('strong', {}, 'cad2bim');
+const projectSubtitle = h('span', {}, '도면을 열어 시작하세요');
+const drawingList = h('div', { class: 'c-drawing-list' }, h('p', { class: 'c-panel__empty' }, '원본 도면 없음'));
+const drawingsPanel = Panel({ title: '원본 도면', children: [drawingList] });
+const documentsView = h('div', { class: 'c-sidebar-page', id: 'sidebar-documents' }, drawingsPanel.el, layersPanel.el);
+const displayView = h('div', { class: 'c-sidebar-page', id: 'sidebar-display', hidden: true },
+  Panel({ title: '보기 설정', children: [autoRotate, h('p', { class: 'c-panel__hint' }, '색상과 내부 단면은 3D 화면 위에서 선택하세요.')] }).el);
+const resultsView = h('div', { class: 'c-sidebar-page', id: 'sidebar-results', hidden: true },
+  statsPanel.el, Button({ label: '샘플 보기', variant: 'ghost', onClick: () => showResult(true) }));
+const sidebarButton = Button({
+  label: '설정 패널 접기', variant: 'ghost', size: 'small', onClick: () => setSidebar(sidebar.hidden),
+});
+sidebarButton.replaceChildren(icon('chevron-left'));
+sidebarButton.setAttribute('aria-label', '설정 패널 접기');
+const sidebar = h('aside', { class: 'l-sidebar', id: 'settings-sidebar' },
+  h('div', { class: 'c-project' }, h('div', {}, projectTitle, projectSubtitle), sidebarButton),
+  documentsView, displayView, resultsView,
+  h('div', { class: 'c-sidebar-status' }, progress.el));
+const sidebarPages = [documentsView, displayView, resultsView];
+const railButtons = ['도면', '표시', '결과'].map((label, i) => h('button', {
+  class: 'c-rail__button', type: 'button', 'aria-pressed': String(i === 0),
+  'aria-controls': sidebarPages[i].id,
+  onClick: () => {
+    sidebarPages.forEach((page, j) => { page.hidden = i !== j; });
+    railButtons.forEach((button, j) => button.setAttribute('aria-pressed', String(i === j)));
+    setSidebar(true);
+  },
+}, icon(['file', 'eye', 'briefcase'][i]), h('span', {}, label)));
+const rail = h('nav', { class: 'c-rail', 'aria-label': '작업 메뉴' },
+  h('div', { class: 'c-rail__brand' }, toolbar.querySelector('.c-toolbar__icon')), ...railButtons);
+function setSidebar(open) {
+  sidebar.hidden = !open;
+  sidebar.closest('.l-workspace').classList.toggle('l-workspace--sidebar-closed', !open);
+  sidebarButton.setAttribute('aria-expanded', String(open));
+  viewer.resize();
+  if (!view3d.hidden && !viewer.person) viewer.fit();
+}
+sidebarButton.setAttribute('aria-controls', sidebar.id);
+sidebarButton.setAttribute('aria-expanded', 'true');
 
 const overlay = DropOverlay();
 const toast = Toast();
 
 root.append(
   h('div', { class: 'l-app' },
-    toolbar,
+    rail,
+    h('div', { class: 'l-workspace' }, toolbar,
     h('main', { class: 'l-body' },
-      h('aside', { class: 'l-sidebar' }, progressPanel.el, layersPanel.el, insidePanel.el, viewPanel.el, statsPanel.el),
-      h('section', { class: 'l-stage' }, tabs.el, h('div', { class: 'l-stage__body' }, view3d, view2d)),
-    ),
+      sidebar,
+      h('section', { class: 'l-stage' },
+        h('div', { class: 'l-stage__header' }, tabs.el), stageBody),
+    )),
   ),
   overlay.el,
   toast.el,
@@ -86,12 +140,23 @@ root.append(
 const viewer = new Viewer3D(viewerHost);
 viewer.onPersonChange = (on) => {
   personButton.textContent = on ? '사람 시점 끝내기' : '사람 시점';
-  viewerHelp.textContent = on ? PERSON_HELP : ORBIT_HELP;
+  personButton.setAttribute('aria-pressed', String(on));
+  viewerHelp.setPerson(on);
+  updateModelTitle();
 };
 // 엘리베이터 안에서는 층 고르는 법을 보여 준다.
 viewer.onPersonHint = (hint) => {
-  if (viewer.person) viewerHelp.textContent = hint || PERSON_HELP;
+  if (viewer.person) viewerHelp.setHint(hint || '');
 };
+
+function updateModelTitle() {
+  const floors = viewer.floors();
+  const shown = floors.filter((key) => !viewer.state.hiddenFloors.has(key));
+  const scope = shown.length === floors.length ? '전체 건물'
+    : shown.length ? `표시 층 · ${shown.map(floorLabel).join(' · ')}` : '표시 층 없음';
+  modelTitle.textContent = viewer.person ? '3D · 사람 시점' : cutFloor
+    ? `3D · ${floorLabel(cutFloor)} 내부 단면 · ${viewer.state.hiddenFloors.has(cutFloor) ? '숨김' : '높이 1.25m'}` : `3D · ${scope}`;
+}
 
 // ---------- 끌어다 놓기 ----------
 // 데스크톱에서는 Python 쪽 drop 처리기가 실제 경로를 받는다. 여기서는 표시만 한다.
@@ -155,12 +220,24 @@ async function showResult(useSample, took = '') {
     const floors = viewer.load(model.dae);
     viewer.setFurniture(model.furniture);
     viewerEmpty.hidden = true;
-    viewerHelp.hidden = false;
+    viewerHelp.el.hidden = false;
+    cutFloor = null;
+    updateModelTitle();
     renderLayers(floors);
     renderInside(floors);
     renderStats(model.summary, floors.length);
-    plans.setPlans(model.plans || []);
-    tabs.select('3d');
+    const sourcePlans = model.plans || [];
+    const planButtons = sourcePlans.map((plan, i) => h('button', {
+      class: 'c-drawing-list__item', type: 'button', 'aria-pressed': String(i === 0),
+      onClick: () => { plans.select(i); if (view2d.hidden) tabs.select('split'); },
+    }, plan.name));
+    planButtons.forEach((button, i) => { button.title = sourcePlans[i].name; });
+    plans.onSelect = (i) => planButtons.forEach((button, j) => button.setAttribute('aria-pressed', String(i === j)));
+    drawingList.replaceChildren(...(planButtons.length ? planButtons : [h('p', { class: 'c-panel__empty' }, '원본 도면 없음')]));
+    plans.setPlans(sourcePlans);
+    projectTitle.textContent = useSample ? '주민센터' : '변환 결과';
+    projectSubtitle.textContent = useSample ? '샘플 프로젝트' : `${sourcePlans.length}개 원본 도면`;
+
     progress.set({ state: 'done', message: `${useSample ? '샘플(주민센터)' : '변환 완료'} · ${floors.length}개 층${took}` });
   } catch (err) {
     progress.set({ state: 'error', message: err.message || String(err) });
@@ -169,9 +246,17 @@ async function showResult(useSample, took = '') {
 
 function renderLayers(floors) {
   layersPanel.setChildren([
-    ToggleList({
-      items: floors.map((key) => ({ key, label: floorLabel(key) })),
-      onChange: (key, on) => viewer.setFloorVisible(key, on),
+    ...floors.map((key) => {
+      const categories = [['Walls', '벽체'], ['Doors', '문'], ['Windows', '창'], ['Columns', '기둥'], ['Slabs', '바닥'], ['Stairs', '계단']]
+        .filter(([suffix]) => viewer.groups.has(`${key}_${suffix}`));
+      return h('details', { class: 'c-floor-tree' },
+        h('summary', {}, icon('layers'), h('span', {}, floorLabel(key))),
+        ToggleList({ items: [{ key, label: `${floorLabel(key)} 표시` }], onChange: (_, on) => {
+          viewer.setFloorVisible(key, on); updateModelTitle();
+        } }),
+        ToggleList({ items: categories.map(([suffix, label]) => ({ key: `${key}_${suffix}`, label })),
+          onChange: (name, on) => viewer.setGroupVisible(name, on) }),
+      );
     }),
     ToggleList({
       items: [
@@ -191,14 +276,16 @@ function renderLayers(floors) {
 // 층을 고르면 그 층 바닥 1.2m 위에서 잘라 위를 걷어 낸다. 방·문·창이 평면도처럼 보인다.
 function renderInside(floors) {
   const cut = Segmented({
-    options: [{ key: '', label: '끔' }, ...floors.map((key) => ({ key, label: floorLabel(key) }))],
+    options: [{ key: '', label: '전체 건물' }, ...floors.map((key) => ({ key, label: floorLabel(key) }))],
     active: '',
-    onChange: (key) => viewer.setCut(key || null),
+    onChange: (key) => {
+      cutFloor = key || null;
+      viewer.setCut(cutFloor);
+      updateModelTitle();
+    },
   });
-  insidePanel.setChildren([
-    cut.el,
-    h('p', { class: 'c-panel__hint' }, '층을 고르면 그 층만 남기고 바닥 1.25m 높이에서 잘라 보여 줍니다. 잘린 면은 진하게 칠합니다. W·A·S·D로 방 안을 걸어 다닐 수 있습니다.'),
-  ]);
+  insideControls.replaceChildren(h('span', { class: 'c-panel__hint' }, '층·내부 보기'), cut.el);
+  insideControls.hidden = false;
 }
 
 function renderStats(summary, floorCount) {
@@ -216,9 +303,9 @@ function renderStats(summary, floorCount) {
 
 // ---------- 시작 ----------
 api.init().then((mode) => {
-  if (mode === 'browser') toolbar.querySelector('.c-toolbar__hint').textContent += ' · 브라우저 미리보기(샘플 데이터)';
+  if (mode === 'browser') toolbar.title = '브라우저 미리보기 · 파일 열기는 데스크톱 앱에서 사용하세요';
   // 주소 끝에 ?sample 을 붙이면 샘플을 바로 띄운다. 디자인 작업과 화면 캡처용이다.
   const params = new URLSearchParams(location.search);
   const shown = params.has('sample') ? showResult(true) : Promise.resolve();
-  shown.then(() => { if (params.get('tab') === '2d') tabs.select('2d'); });
+  shown.then(() => { if (['2d', 'split'].includes(params.get('tab'))) tabs.select(params.get('tab')); });
 });
