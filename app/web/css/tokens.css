@@ -33,6 +33,8 @@
   --color-status-success: #15803d;
   --color-status-success-subtle: #e7f5ec;
   --color-status-danger: #dc2626;
+  --color-status-warning: #d97706;
+  --color-status-warning-subtle: #fdf3e1;
 
   /* font */
   --font-family-base: "Malgun Gothic", "Segoe UI", system-ui, sans-serif;

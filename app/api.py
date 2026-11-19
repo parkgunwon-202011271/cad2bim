@@ -98,6 +98,25 @@ class Api:
             item["image"] = _data_url(item["image"]) if item["image"] else None
         return review
 
+    def set_review_decision(self, key: str, answer: str | None) -> dict:
+        """검토 지점의 답을 사람이 정하거나(answer) AI 답으로 되돌린다(None). 모델에는 apply_review 뒤에 반영된다."""
+        if self._result is None or self._busy.locked():
+            return {"ok": False, "message": "변환 중에는 답을 바꿀 수 없습니다."}
+        try:
+            decision = jobs.set_review_decision(self._result, key, answer)
+        except (ValueError, OSError) as exc:
+            return {"ok": False, "message": str(exc) if isinstance(exc, ValueError) else "답을 저장하지 못했습니다."}
+        return {"ok": True, "decision": decision}
+
+    def apply_review(self) -> bool:
+        """바뀐 답을 모델에 반영한다: 같은 입력 폴더를 다시 빌드한다(인식 결과는 다시 쓰고, 저장된 답만 적용)."""
+        folder = self._result.parent if self._result is not None else None
+        if folder is None or self._result.name != jobs.OUT_DIR_NAME or not folder.is_dir():
+            self._emit({"type": "error", "message": "다시 만들 입력 폴더를 찾지 못했습니다."})
+            return False
+        self.convert_paths([str(folder)])
+        return True
+
     # ---- 내부 ----
 
     def get_plans(self) -> list[dict]:

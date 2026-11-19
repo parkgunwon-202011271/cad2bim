@@ -68,23 +68,41 @@ const fullButton = h('button', {
   onClick: () => setFullscreen(!view3d.classList.contains('l-stage__view--full')),
 });
 // AI 검토: 규칙이 판단하지 못한 지점의 목록(사이드바)과 상세 카드(뷰어 위). 항목을 누르면 3D가 그 자리로 간다.
-const reviewList = ReviewList({ floorLabel: (key) => floorLabel(key), onSelect: (item) => showSpot(item) });
+const reviewList = ReviewList({
+  floorLabel: (key) => floorLabel(key), onSelect: (item) => showSpot(item),
+  onApply: () => { if (!started) api.applyReview(); },
+});
 const reviewCard = ReviewCard({
   floorLabel: (key) => floorLabel(key),
   onClose: () => { viewer.clearSpot(); reviewList.select(null); },
+  onDecide: (item, answer) => decideSpot(item, answer),
 });
+let reviewAnswers; // 이 결과에서 고를 수 있는 답
+// 사람이 답을 확인하거나 고친다. 답은 바로 저장되고, 3D 모델에는 '변경 적용'으로 다시 만들 때 반영된다.
+async function decideSpot(item, answer) {
+  const result = await api.setReviewDecision(item, answer);
+  if (!result?.ok) {
+    toast.show(result?.message || '답을 저장하지 못했습니다.');
+    return;
+  }
+  item.decision = result.decision;
+  reviewList.refresh();
+  reviewList.select(item.key);
+  reviewCard.show(item, reviewAnswers);
+}
 let cutSwitch = null; // '층·내부 보기' 선택. 검토 지점으로 갈 때 그 층 단면으로 바꾼다
 function showSpot(item) {
   if (view3d.hidden) tabs.select('3d');
   cutSwitch?.select(item.floor); // 그 층만 남기고 잘라 벽 안쪽이 보이게 한다
   reviewList.select(item.key);
-  reviewCard.show(item);
+  reviewCard.show(item, reviewAnswers);
   // 카드가 뷰어 왼쪽을 덮는 만큼 지점을 오른쪽으로 밀어 보여 준다.
   viewer.focusSpot(item, (reviewCard.el.offsetWidth + 24) / Math.max(viewerHost.clientWidth, 1));
 }
 function setReview(review) {
   reviewCard.hide();
   viewer.clearSpot();
+  reviewAnswers = review?.answers?.length ? review.answers : undefined;
   reviewList.setItems(review?.items || []);
   const count = reviewList.count();
   reviewBadge.textContent = count ? String(count) : '';
