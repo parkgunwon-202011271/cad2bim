@@ -7,9 +7,9 @@
         "align": "grid",
         "match": "1.00",
         "alternatives": "0",
-        "walls": "35",
+        "walls": "36",
         "columns": "21",
-        "openings": "29",
+        "openings": "30",
         "rooms": "15"
       },
       {
@@ -18,7 +18,7 @@
         "align": "reference",
         "match": "-",
         "alternatives": "1",
-        "walls": "36",
+        "walls": "37",
         "columns": "28",
         "openings": "33",
         "rooms": "15"
@@ -29,19 +29,19 @@
         "align": "grid",
         "match": "1.00",
         "alternatives": "1",
-        "walls": "30",
+        "walls": "31",
         "columns": "12",
-        "openings": "20",
+        "openings": "21",
         "rooms": "8"
       }
     ],
     "totals": {
-      "walls": "101",
+      "walls": "104",
       "glazed_bands": "11",
       "columns": "61",
-      "openings": "82",
-      "doors": "39",
-      "windows": "34",
+      "openings": "84",
+      "doors": "45",
+      "windows": "33",
       "slabs": "3",
       "stairs": "2",
       "spaces": "38",
