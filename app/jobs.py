@@ -45,6 +45,8 @@ def prepare_input(paths: list[str]) -> Path:
     files = [p for p in items if p.is_file() and p.suffix.lower() in SUFFIXES]
     if not files:
         raise ValueError("DWG 또는 DXF 파일이 없습니다.")
+    if len({f.name.casefold() for f in files}) != len(files):
+        raise ValueError("이름이 같은 도면 파일이 있습니다. 파일 이름을 다르게 바꾼 뒤 다시 놓아 주세요.")
     stamp = time.strftime("%Y%m%d-%H%M%S")
     job = jobs_root() / stamp
     n = 1
