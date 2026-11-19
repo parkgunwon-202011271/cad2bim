@@ -32,6 +32,14 @@ def main() -> int:
         name = f"plans/{plan['path'].name}"
         shutil.copy2(plan["path"], TARGET / name)
         meta_plans.append({"name": plan["name"], "file": name})
+    # 검토 지점(그림 포함). 브라우저 미리보기에서도 검토 패널이 보이게 한다.
+    review = jobs.load_review(out_dir)
+    for item in review["items"]:
+        if item["image"]:
+            (TARGET / "spots").mkdir(exist_ok=True)
+            shutil.copy2(item["image"], TARGET / "spots" / item["image"].name)
+            item["image"] = f"spots/{item['image'].name}"
+    (TARGET / "review.json").write_text(json.dumps(review, ensure_ascii=False, indent=1), encoding="utf-8")
     summary = jobs.parse_summary((out_dir / jobs.APP_DIR_NAME / "build.txt").read_text(encoding="utf-8"))
     (TARGET / "summary.json").write_text(
         json.dumps({"summary": summary, "plans": meta_plans}, ensure_ascii=False, indent=2), encoding="utf-8",

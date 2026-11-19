@@ -7,6 +7,7 @@ import {
 import { PlanViewer } from './ui/plan-viewer.js';
 import { InputHelp } from './ui/input-help.js';
 import { MiniMap } from './ui/minimap.js';
+import { ReviewCard, ReviewList } from './ui/review-panel.js';
 import { SplitDivider } from './ui/split-divider.js';
 import { Viewer3D, floorLabel } from './viewer.js';
 
@@ -66,13 +67,36 @@ const fullButton = h('button', {
   class: 'c-viewer__action', type: 'button', hidden: true, 'aria-pressed': 'false',
   onClick: () => setFullscreen(!view3d.classList.contains('l-stage__view--full')),
 });
+// AI 검토: 규칙이 판단하지 못한 지점의 목록(사이드바)과 상세 카드(뷰어 위). 항목을 누르면 3D가 그 자리로 간다.
+const reviewList = ReviewList({ floorLabel: (key) => floorLabel(key), onSelect: (item) => showSpot(item) });
+const reviewCard = ReviewCard({
+  floorLabel: (key) => floorLabel(key),
+  onClose: () => { viewer.clearSpot(); reviewList.select(null); },
+});
+let cutSwitch = null; // '층·내부 보기' 선택. 검토 지점으로 갈 때 그 층 단면으로 바꾼다
+function showSpot(item) {
+  if (view3d.hidden) tabs.select('3d');
+  cutSwitch?.select(item.floor); // 그 층만 남기고 잘라 벽 안쪽이 보이게 한다
+  reviewList.select(item.key);
+  reviewCard.show(item);
+  // 카드가 뷰어 왼쪽을 덮는 만큼 지점을 오른쪽으로 밀어 보여 준다.
+  viewer.focusSpot(item, (reviewCard.el.offsetWidth + 24) / Math.max(viewerHost.clientWidth, 1));
+}
+function setReview(review) {
+  reviewCard.hide();
+  viewer.clearSpot();
+  reviewList.setItems(review?.items || []);
+  const count = reviewList.count();
+  reviewBadge.textContent = count ? String(count) : '';
+  reviewBadge.hidden = !count;
+}
 // 미니맵: 전체화면의 사람 시점에서 서 있는 층의 평면과 현재 위치·시야를 오른쪽 아래에 보여 준다.
 const miniMap = MiniMap({
   pose: () => viewer.personPose(), plan: (key) => viewer.floorPlan(key), label: (key) => floorLabel(key),
 });
 // 조작 안내와 전체화면 버튼은 뷰어 위에 겹쳐 둔다(뷰어를 더 크게 쓰기 위해).
 const view3d = h('div', { class: 'l-stage__view', 'aria-label': '3D 모델' }, modelTitle, viewTools,
-  h('div', { class: 'c-viewer-frame' }, viewerHost, fullButton, viewerHelp.el, miniMap.el));
+  h('div', { class: 'c-viewer-frame' }, viewerHost, fullButton, viewerHelp.el, miniMap.el, reviewCard.el));
 function setFullscreen(on) {
   view3d.classList.toggle('l-stage__view--full', on);
   miniMap.setVisible(on && Boolean(viewer.person));
@@ -123,12 +147,15 @@ const sidebarButton = Button({
 });
 sidebarButton.replaceChildren(icon('chevron-left'));
 sidebarButton.setAttribute('aria-label', '설정 패널 접기');
+const reviewView = h('div', { class: 'c-sidebar-page', id: 'sidebar-review', hidden: true },
+  Panel({ title: 'AI 검토', children: [reviewList.el] }).el);
+const reviewBadge = h('span', { class: 'c-rail__badge', hidden: true, 'aria-label': '검토할 곳 수' });
 const sidebar = h('aside', { class: 'l-sidebar', id: 'settings-sidebar' },
   h('div', { class: 'c-project' }, h('div', {}, projectTitle, projectSubtitle), sidebarButton),
-  documentsView, displayView, resultsView,
+  documentsView, displayView, resultsView, reviewView,
   h('div', { class: 'c-sidebar-status' }, progress.el));
-const sidebarPages = [documentsView, displayView, resultsView];
-const railButtons = ['도면', '표시', '결과'].map((label, i) => h('button', {
+const sidebarPages = [documentsView, displayView, resultsView, reviewView];
+const railButtons = ['도면', '표시', '결과', '검토'].map((label, i) => h('button', {
   class: 'c-rail__button', type: 'button', 'aria-pressed': String(i === 0),
   'aria-controls': sidebarPages[i].id,
   onClick: () => {
@@ -136,7 +163,7 @@ const railButtons = ['도면', '표시', '결과'].map((label, i) => h('button',
     railButtons.forEach((button, j) => button.setAttribute('aria-pressed', String(i === j)));
     setSidebar(true);
   },
-}, icon(['file', 'eye', 'briefcase'][i]), h('span', {}, label)));
+}, icon(['file', 'eye', 'briefcase', 'check-square'][i]), h('span', {}, label), i === 3 && reviewBadge));
 const rail = h('nav', { class: 'c-rail', 'aria-label': '작업 메뉴' },
   h('div', { class: 'c-rail__brand' }, toolbar.querySelector('.c-toolbar__icon')), ...railButtons);
 function setSidebar(open) {
@@ -262,6 +289,7 @@ async function showResult(useSample, took = '') {
     renderLayers(floors);
     renderInside(floors);
     renderStats(model.summary, floors.length);
+    setReview(await api.getReview(useSample));
     const sourcePlans = model.plans || [];
     const planButtons = sourcePlans.map((plan, i) => h('button', {
       class: 'c-drawing-list__item', type: 'button', 'aria-pressed': String(i === 0),
@@ -297,6 +325,8 @@ async function resetAll() {
   modelTitle.textContent = '3D · 모델 없음';
   insideControls.replaceChildren();
   insideControls.hidden = true;
+  cutSwitch = null;
+  setReview(null);
   layersPanel.setChildren([emptyLayers()]);
   statsPanel.setChildren([h('div', { class: 'c-panel__empty' }, '-')]);
   drawingList.replaceChildren(emptyDrawings());
@@ -348,6 +378,7 @@ function renderInside(floors) {
       updateModelTitle();
     },
   });
+  cutSwitch = cut;
   insideControls.replaceChildren(h('span', { class: 'c-panel__hint' }, '층·내부 보기'), cut.el);
   insideControls.hidden = false;
 }

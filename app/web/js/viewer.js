@@ -112,6 +112,11 @@ const ELEVATOR_CALL_MM = 1500; // 문 앞 이 거리 안에 서면 카를 부른
 const CAP_COLOR = '#4b4f56'; // 잘린 면(포셰)
 // 미니맵. 발밑 높이보다 이만큼 위에 있는 층 바닥까지는 그 층으로 본다(계단을 거의 다 오르면 윗층 평면으로 바뀐다).
 const FLOOR_SWITCH = 1.0; // m
+// 검토 지점 표시. 단면(1.25m)보다 높게 세워 잘린 벽 위로 솟아 보이게 한다.
+const SPOT_COLOR = '#e53935';
+const SPOT_HEIGHT = 2.6; // m
+const SPOT_MARGIN = 0.25; // m. 지점 둘레로 더 두르는 여유
+const SPOT_VIEW_M = 11; // m. 지점을 볼 거리
 
 export function floorLabel(key) {
   const m = FLOOR.exec(key);
@@ -191,6 +196,7 @@ export class Viewer3D {
     this.look = null;
     this.onPersonChange = null;
     this.onFrame = null; // 한 장면을 그린 뒤 부른다(미니맵 갱신)
+    this.spot = null; // 검토 지점 표시
 
     const canvas = this.renderer.domElement;
     canvas.addEventListener('pointerdown', (e) => this.onLook(e, 'down'));
@@ -481,6 +487,7 @@ export class Viewer3D {
   load(daeText) {
     // 사람 시점 종료는 기존 층의 단면을 복원하므로 그룹을 비우기 전에 끝낸다.
     if (this.person) this.leavePerson();
+    this.clearSpot();
     if (this.model) this.scene.remove(this.model);
     this.clearStencils();
     // ColladaLoader가 단위(mm → m)와 Z-위 축을 맞춰 준다.
@@ -550,6 +557,7 @@ export class Viewer3D {
   /** 모델을 비워 아무것도 열지 않은 처음 상태로 돌린다. */
   clear() {
     if (this.person) this.leavePerson();
+    this.clearSpot();
     this.fly = null;
     this.setFurniture(null);
     this.clearStencils();
@@ -565,6 +573,69 @@ export class Viewer3D {
     this.ground = null;
     this.state = { roof: true, site: true, furniture: true, hiddenFloors: new Set(), cut: null };
     this.cap.visible = false;
+  }
+
+  /**
+   * 검토 지점을 빨간 상자로 표시하고 그 자리를 비스듬히 내려다보게 간다. 표시했으면 true.
+   * spot: { floor, position: [x, y, z](mm, Z 위. furniture.json과 같은 건물 좌표), direction: [ux, uy], width, thickness(mm) }
+   * coveredLeft: 화면 왼쪽을 가리는 것(상세 카드)의 폭 비율(0~1). 지점이 남은 영역의 가운데에 오게 한다.
+   */
+  focusSpot(spot, coveredLeft = 0) {
+    this.clearSpot();
+    const group = this.groups.get(spot.floor);
+    if (!this.model || !group || !spot.position) return false;
+    if (this.person) this.leavePerson();
+    this.model.updateMatrixWorld(true);
+    const [x, y, z] = spot.position;
+    const [ux, uy] = spot.direction;
+    // 층 묶음 안은 건물 좌표(mm)다. 가구와 같은 방법으로 화면 좌표로 옮긴다.
+    const base = group.localToWorld(new THREE.Vector3(x, y, z));
+    const along = group.localToWorld(new THREE.Vector3(x + ux * 1000, y + uy * 1000, z)).sub(base);
+    const meter = along.length(); // 1m가 화면 좌표로 얼마인지
+    along.normalize();
+    const size = new THREE.Vector3(
+      (spot.width / 1000 + SPOT_MARGIN * 2) * meter, SPOT_HEIGHT * meter, (spot.thickness / 1000 + SPOT_MARGIN * 2) * meter,
+    );
+    const geometry = new THREE.BoxGeometry(size.x, size.y, size.z);
+    const marker = new THREE.Mesh(geometry, new THREE.MeshBasicMaterial({
+      color: SPOT_COLOR, transparent: true, opacity: 0.22, depthWrite: false, depthTest: false,
+    }));
+    const edges = new THREE.LineSegments(new THREE.EdgesGeometry(geometry),
+      new THREE.LineBasicMaterial({ color: SPOT_COLOR, depthTest: false }));
+    marker.add(edges);
+    marker.position.copy(base).setY(base.y + size.y / 2);
+    marker.rotation.y = Math.atan2(-along.z, along.x);
+    marker.renderOrder = 5; // 벽에 가려도 보이게 맨 나중에 그린다
+    edges.renderOrder = 6;
+    marker.raycast = () => {};
+    edges.raycast = () => {};
+    this.scene.add(marker);
+    this.spot = marker;
+    // 지금 보던 방향을 유지한 채 비스듬히 내려다본다.
+    const target = base.clone().setY(base.y + 1.0 * meter);
+    const from = this.camera.position.clone().sub(this.controls.target).setY(0);
+    if (from.lengthSq() < 1e-6) from.set(Math.sin(START_AZIMUTH), 0, Math.cos(START_AZIMUTH));
+    from.normalize();
+    const distance = Math.max(SPOT_VIEW_M, (spot.width / 1000) * 2.5) * meter;
+    const position = target.clone().addScaledVector(from, Math.cos(CUT_ELEVATION) * distance);
+    position.y += Math.sin(CUT_ELEVATION) * distance;
+    if (coveredLeft > 0) {
+      // 카메라와 보는 점을 함께 왼쪽으로 옮기면 지점은 화면 오른쪽으로 간다.
+      const half = Math.tan(THREE.MathUtils.degToRad(FOV_OUTSIDE) / 2) * this.camera.aspect * distance;
+      const right = new THREE.Vector3().crossVectors(target.clone().sub(position), this.camera.up).normalize();
+      const shift = right.multiplyScalar(-Math.min(coveredLeft, 0.8) * half);
+      target.add(shift);
+      position.add(shift);
+    }
+    this.flyTo(target, position);
+    return true;
+  }
+
+  clearSpot() {
+    if (!this.spot) return;
+    this.scene.remove(this.spot);
+    this.spot.traverse((obj) => { obj.geometry?.dispose(); obj.material?.dispose(); });
+    this.spot = null;
   }
 
   /** 높이(m)에 있는 사람이 속한 층. 층 바닥이 height + FLOOR_SWITCH 이하인 층 가운데 가장 높은 층이다. */

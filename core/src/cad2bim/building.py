@@ -1044,6 +1044,10 @@ def run_build(folder: Path, height: float | None = None, jobs: int = 1) -> str:
     dae_counts, expected = write_dae(storeys, dae_path, cfg["export"])
     dae_check = verify_dae(dae_path, expected)
     write_furniture(storeys, drawings, out_dir, cfg)
+    if reviewed:
+        from .review import locate_items
+
+        locate_items(storeys, out_dir, common_base(storeys))  # 검토 지점을 모델과 같은 좌표로(앱의 검토 패널)
     dxf_path = out_dir / "building.dxf"
     dxf_counts, dxf_expected = write_dxf(storeys, dxf_path, cfg["export"])
     dxf_check = verify_dxf(dxf_path, dxf_expected)

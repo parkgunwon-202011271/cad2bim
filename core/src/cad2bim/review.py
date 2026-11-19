@@ -22,6 +22,7 @@ from .llm_client import PROVIDERS, QuotaExhausted, ask, configure, default_model
 
 DECISIONS = "decisions.json"
 PENDING = "pending.json"
+ITEMS = "review.json"  # 앱의 검토 패널이 읽는 전체 지점 목록(답이 있는 곳과 없는 곳 모두)
 ANSWERS = ("wall", "door", "window", "open", "drawing_issue")
 _CROP_MM = 4000.0  # 지점 둘레로 보여 줄 반경
 _MM_PER_PX = 15.0  # 도면 그림 해상도
@@ -702,6 +703,63 @@ def apply_decisions(storeys: list[Any], spots: list[Spot], decisions: dict[str, 
     return counts
 
 
+def _image_name(sp: Spot) -> str:
+    return f"{sp.floor}_{sp.opening_id}.png"
+
+
+def _write_items(directory: Path, spots: list[Spot], decisions: dict[str, dict[str, Any]], storeys: list[Any],
+                 drawings: dict[str, Path], out_dir: Path, cfg: dict[str, Any]) -> None:
+    """앱의 검토 패널이 읽을 전체 지점 목록을 쓴다. 답이 이미 있는 지점도 그림과 근거를 갖추게 한다.
+
+    좌표는 아직 도면(IR) 기준이다. 건물 좌표는 층 배치와 공통 원점이 정해진 뒤 locate_items가 넣는다.
+    """
+    path = directory / "spots" / EVIDENCE
+    evidence = json.loads(path.read_text(encoding="utf-8")) if path.is_file() else {}
+    bare = [sp for sp in spots if sp.key not in evidence or not (directory / "spots" / _image_name(sp)).is_file()]
+    if bare:  # 답이 저장돼 있어 묻지 않은 지점은 그림·근거가 없을 수 있다. 사람이 볼 수 있게 만든다
+        render_spots(bare, storeys, drawings, directory, cfg)
+        evidence |= spot_evidence(bare, storeys, drawings, out_dir)
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(json.dumps(evidence, ensure_ascii=False, indent=1), encoding="utf-8")
+    items = []
+    for sp in spots:
+        proof = evidence.get(sp.key) or {}
+        image = directory / "spots" / _image_name(sp)
+        items.append({
+            "key": sp.key, "kind": sp.kind, "floor": sp.floor, "part": sp.part_id, "opening": sp.opening_id,
+            "width": round(sp.width), "thickness": round(sp.thickness),
+            "center": [round(sp.center[0], 1), round(sp.center[1], 1)], "direction": [round(sp.direction[0], 4), round(sp.direction[1], 4)],
+            "image": f"spots/{image.name}" if image.is_file() else None,
+            "evidence": {"counts": proof.get("counts") or {}, "sides": proof.get("sides") or [], "text": proof.get("text", "")},
+            "decision": decisions.get(sp.key),
+        })
+    (directory / ITEMS).write_text(json.dumps({"answers": list(ANSWERS), "items": items}, ensure_ascii=False, indent=1), encoding="utf-8")
+
+
+def locate_items(storeys: list[Any], out_dir: Path, base: tuple[float, float]) -> int:
+    """검토 지점에 건물 좌표(mm, Z 위. furniture.json과 같다)를 넣는다. 3D에서 그 자리로 가는 데 쓴다. 지점 수를 돌려준다.
+
+    base는 모델 파일과 같은 공통 원점이다. 벽이 더해지면 원점이 바뀌므로 내보내기와 같은 값으로 불러야 한다.
+    """
+    path = Path(out_dir) / "_llm" / ITEMS
+    if not path.is_file():
+        return 0
+    data = json.loads(path.read_text(encoding="utf-8"))
+    by_part = {s.part.part_id: s for s in storeys}
+    for item in data["items"]:
+        s = by_part.get(item["part"])
+        if s is None:
+            item["position"] = None
+            continue
+        ox, oy = s.part.ir["origin_offset"]
+        item["position"] = [
+            round(item["center"][0] + ox + s.shift[0] - base[0], 1), round(item["center"][1] + oy + s.shift[1] - base[1], 1),
+            round(s.elevation, 1),
+        ]
+    path.write_text(json.dumps(data, ensure_ascii=False, indent=1), encoding="utf-8")
+    return len(data["items"])
+
+
 def review(storeys: list[Any], drawings: dict[str, Path], out_dir: Path, cfg: dict[str, Any]) -> str | None:
     """LLM 검토를 돌리고 빌드 기록 한 줄을 돌려준다. 꺼져 있으면 None."""
     which = mode(cfg)
@@ -758,4 +816,5 @@ def review(storeys: list[Any], drawings: dict[str, Path], out_dir: Path, cfg: di
     ]
     directory.mkdir(parents=True, exist_ok=True)  # 답이 다 있으면 지난번 대기 목록이 남지 않게 비운다
     (directory / PENDING).write_text(json.dumps(pending, ensure_ascii=False, indent=1), encoding="utf-8")
+    _write_items(directory, spots, decisions, storeys, drawings, out_dir, cfg)
     return f"llm_review: spots={len(spots)} decided={len(spots) - len(pending)} pending={len(pending)} " + " ".join(f"{k}={v}" for k, v in counts.items())

@@ -89,6 +89,15 @@ class Api:
             "plans": plans,
         }
 
+    def get_review(self) -> dict:
+        """지금 결과의 검토 지점(규칙이 판단하지 못해 LLM·사람이 고르는 곳). 그림은 data URL로 넣는다."""
+        if self._result is None:
+            return {"answers": [], "items": []}
+        review = jobs.load_review(self._result)
+        for item in review["items"]:
+            item["image"] = _data_url(item["image"]) if item["image"] else None
+        return review
+
     # ---- 내부 ----
 
     def get_plans(self) -> list[dict]:

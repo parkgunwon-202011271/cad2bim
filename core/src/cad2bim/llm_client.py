@@ -78,10 +78,14 @@ def ask(provider: str, model: str, prompt: str, image_png: bytes | None = None, 
         except Cad2BimError:
             raise
         except Exception as exc:  # 네트워크·한도 오류
-            code = getattr(exc, "code", None) or getattr(exc, "status_code", None)
+            # HTTP 상태를 먼저 본다. openai의 code는 숫자가 아니라 'insufficient_quota' 같은 글자다.
+            code = getattr(exc, "status_code", None) or getattr(exc, "code", None)
             text = str(exc)
             if code == 429 and ("PerDay" in text or "per day" in text.lower()):
                 raise QuotaExhausted(f"LLM 하루 한도가 다 됐습니다({provider}:{model}). 남은 지점은 대기 목록에 둡니다.") from exc
+            if code == 429 and ("insufficient_quota" in text or "no credits" in text.lower()):
+                # 잔액이 없다: 기다려도 풀리지 않는다. 빌드를 멈추지 않고 규칙 결과로 간다(남은 지점은 대기 목록).
+                raise QuotaExhausted(f"LLM 계정에 남은 잔액이 없습니다({provider}:{model}). 남은 지점은 대기 목록에 둡니다.") from exc
             permanent = isinstance(code, int) and 400 <= code < 500 and code != 429  # 요청이 잘못됐다: 다시 물어도 같다
             if permanent:
                 raise Cad2BimError(f"LLM 호출에 실패했습니다({provider}): {type(exc).__name__}: {text[:200]}") from exc

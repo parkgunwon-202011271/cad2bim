@@ -4,6 +4,7 @@
 """
 from __future__ import annotations
 
+import json
 import os
 import re
 import shutil
@@ -132,6 +133,20 @@ def run_build(folder: Path, emit: Emit) -> Path:
     app_dir.mkdir(parents=True, exist_ok=True)
     (app_dir / "build.txt").write_text(stdout, encoding="utf-8")
     return out_dir
+
+
+def load_review(out_dir: Path) -> dict:
+    """검토 패널에 보일 지점 목록(_llm/review.json). 없거나 읽지 못하면 빈 목록. 그림 경로는 결과 폴더 기준이다."""
+    path = Path(out_dir) / "_llm" / "review.json"
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return {"answers": [], "items": []}
+    items = []
+    for item in data.get("items", []):
+        image = Path(out_dir) / "_llm" / item["image"] if item.get("image") else None
+        items.append({**item, "image": image if image is not None and image.is_file() else None})
+    return {"answers": data.get("answers", []), "items": items}
 
 
 def resolve_result(folder: Path) -> Path:

@@ -143,14 +143,22 @@
     frame.style.width = '1100px';
     await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
     assert(frame.contentWindow.getComputedStyle(doc.querySelector('.l-stage__body')).flexDirection === 'row', '넓은 화면에서 좌우 분할로 복원해야 합니다');
+    rail[3].click();
+    const rows = doc.querySelectorAll('.c-review__row');
+    assert(!doc.querySelector('#sidebar-review').hidden && rows.length > 0 && doc.querySelector('.c-rail__badge').textContent === String(rows.length), '검토 메뉴에 검토 지점 목록과 개수를 보여야 합니다');
+    rows[0].click();
+    const card = doc.querySelector('.c-review-card');
+    assert(!card.hidden && card.querySelector('img') && rows[0].getAttribute('aria-pressed') === 'true' && caption.textContent.includes('단면'), '지점을 누르면 도면 조각이 든 상세 카드와 그 층 단면을 보여야 합니다');
+    card.querySelector('.c-review-card__close').click();
+    assert(card.hidden && rows[0].getAttribute('aria-pressed') === 'false', '상세 카드를 닫을 수 있어야 합니다');
     [...doc.querySelectorAll('button')].find((el) => el.textContent === '도면 초기화').click();
     await new Promise((resolve) => setTimeout(resolve, 50));
     assert(caption.textContent.includes('모델 없음') && full.hidden && help.hidden, '도면 초기화 후 3D 영역이 처음 상태여야 합니다');
-    assert(!doc.querySelector('.c-drawing-list__item') && !doc.querySelector('.c-plan-viewer__chip') && !doc.querySelector('.c-floor-tree'), '도면 초기화 후 도면·층 목록이 비어야 합니다');
+    assert(!doc.querySelector('.c-drawing-list__item') && !doc.querySelector('.c-plan-viewer__chip') && !doc.querySelector('.c-floor-tree') && !doc.querySelector('.c-review__row') && doc.querySelector('.c-rail__badge').hidden, '도면 초기화 후 도면·층·검토 목록이 비어야 합니다');
     assert(!views[0].hidden && views[1].hidden && !doc.querySelector('.c-viewer__empty').hidden, '도면 초기화 후 3D 탭의 안내 문구로 돌아와야 합니다');
     floor.geometry.dispose();
     floor.material.dispose();
-    result.textContent = 'PASS: modes, sidebar, captions, split resize, fullscreen, input help, person mode, minimap, sample load, camera fit, reset';
+    result.textContent = 'PASS: modes, sidebar, captions, split resize, fullscreen, input help, person mode, minimap, sample load, camera fit, review panel, reset';
   } catch (error) {
     result.textContent = `FAIL: ${error.message}`;
     throw error;

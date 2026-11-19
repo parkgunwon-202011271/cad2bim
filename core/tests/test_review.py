@@ -52,6 +52,24 @@ def test_off_does_nothing_and_cache_leaves_a_pending_list(tmp_path, monkeypatch)
     assert s2.part.ir["openings"][0]["type"] == "window"
 
 
+def test_item_list_for_the_app_keeps_decided_spots_and_gets_building_coordinates(tmp_path, monkeypatch):
+    monkeypatch.setenv("CAD2BIM_LLM", "cache")
+    monkeypatch.setattr(review, "render_spots", lambda *a, **k: {})
+    s = storey([gap("U1", 2000.0), gap("U2", 5000.0)])
+    s.shift, s.elevation = (300.0, -50.0), 4500.0
+    key = review.find_spots([s])[0].key
+    review.save_decisions(tmp_path / "_llm", {key: {"answer": "door", "reason": "문 호", "model": "openai:test"}})
+    review.review([s], {}, tmp_path, {})
+    assert review.locate_items([s], tmp_path, (1000.0, 0.0)) == 2
+    data = json.loads((tmp_path / "_llm" / review.ITEMS).read_text(encoding="utf-8"))
+    decided, waiting = data["items"]  # 답이 있는 곳도 목록에 남는다(대기 목록에는 없다)
+    assert decided["decision"]["answer"] == "door" and waiting["decision"] is None
+    assert decided["kind"] == "opening" and decided["floor"] == "F2" and decided["width"] == 1200
+    ox, oy = s.part.ir["origin_offset"]
+    assert decided["position"] == [2000.0 + ox + 300.0 - 1000.0, 0.0 + oy - 50.0, 4500.0]  # 도면 좌표 + 원점 + 층 이동 - 공통 원점
+    assert data["answers"] == list(review.ANSWERS)
+
+
 def test_outline_without_a_wall_becomes_a_spot_and_a_wall_answer_closes_it():
     ir = plan_ir()
     ir["source"] = {"sha256": "abcdef0123456789zz", "unit_scale": 1.0}

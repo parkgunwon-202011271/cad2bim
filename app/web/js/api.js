@@ -63,6 +63,21 @@ export async function getPlans() {
   return null;
 }
 
+/** 검토 지점 목록({ answers, items }). 규칙이 판단하지 못해 LLM·사람이 고르는 곳이다. 없으면 빈 목록. */
+export async function getReview(useSample = false) {
+  const empty = { answers: [], items: [] };
+  if (mode === 'desktop' && !useSample) return (await window.pywebview.api.get_review?.()) ?? empty;
+  try {
+    const response = await fetch('sample/review.json');
+    if (!response.ok) return empty;
+    const review = await response.json();
+    review.items.forEach((item) => { if (item.image) item.image = `sample/${item.image}`; });
+    return review;
+  } catch {
+    return empty;
+  }
+}
+
 export async function loadSample() {
   const [dae, meta, furniture] = await Promise.all([
     fetch('sample/building.dae').then((r) => r.text()),
