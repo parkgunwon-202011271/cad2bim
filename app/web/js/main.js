@@ -16,13 +16,17 @@ const toolbar = Toolbar({
   title: 'cad2bim',
   hint: 'CAD 평면도 → 층별 3D 모델',
   actions: [
+    Button({ label: '도면 초기화', onClick: () => resetAll() }),
     Button({ label: '결과 열기', onClick: () => api.openResult() }),
     Button({ label: '도면 폴더 열기', variant: 'primary', onClick: () => api.chooseFolder() }),
   ],
 });
 
 const progress = ProgressPanel();
-const layersPanel = Panel({ title: '층 · 요소', children: [h('div', { class: 'c-panel__empty' }, '모델을 불러오면 층이 보입니다.')] });
+const IDLE_MESSAGE = '도면을 끌어다 놓거나 폴더를 여세요.';
+const emptyLayers = () => h('div', { class: 'c-panel__empty' }, '모델을 불러오면 층이 보입니다.');
+const emptyDrawings = () => h('p', { class: 'c-panel__empty' }, '원본 도면 없음');
+const layersPanel = Panel({ title: '층 · 요소', children: [emptyLayers()] });
 const autoRotate = ToggleList({
   items: [{ key: 'rotate', label: '자동 회전', checked: false }],
   onChange: (_, on) => viewer.setAutoRotate(on),
@@ -55,14 +59,34 @@ const viewerEmpty = h('div', { class: 'c-viewer__empty' },
   'DWG 폴더 하나, 또는 DWG·DXF 파일 여러 개');
 const viewerHelp = InputHelp();
 viewerHost.append(viewerEmpty);
+const icon = (name) => h('img', { src: `assets/icons/${name}.svg`, alt: '', width: '24', height: '24' });
+// 전체화면: 3D 영역(제목·도구·뷰어)이 앱 창 전체를 덮는다. 다시 누르거나 Esc로 돌아온다.
+const fullButton = h('button', {
+  class: 'c-viewer__action', type: 'button', hidden: true, 'aria-pressed': 'false',
+  onClick: () => setFullscreen(!view3d.classList.contains('l-stage__view--full')),
+});
+// 조작 안내와 전체화면 버튼은 뷰어 위에 겹쳐 둔다(뷰어를 더 크게 쓰기 위해).
 const view3d = h('div', { class: 'l-stage__view', 'aria-label': '3D 모델' }, modelTitle, viewTools,
-  h('div', { class: 'c-viewer-frame' }, viewerHost), viewerHelp.el);
+  h('div', { class: 'c-viewer-frame' }, viewerHost, fullButton, viewerHelp.el));
+function setFullscreen(on) {
+  view3d.classList.toggle('l-stage__view--full', on);
+  fullButton.replaceChildren(icon(on ? 'minimize' : 'maximize'));
+  fullButton.setAttribute('aria-pressed', String(on));
+  fullButton.setAttribute('aria-label', on ? '전체화면 끝내기' : '전체화면으로 보기');
+  fullButton.title = on ? '전체화면 끝내기 (Esc)' : '전체화면으로 보기';
+}
+setFullscreen(false);
+// 사람 시점의 Esc는 뷰어가 먼저 쓴다(시점 종료). 그때는 전체화면을 유지한다.
+window.addEventListener('keydown', (event) => {
+  if (event.code === 'Escape' && !viewer.person && view3d.classList.contains('l-stage__view--full')) setFullscreen(false);
+}, true);
 const plans = PlanViewer();
 const view2d = h('div', { class: 'l-stage__view', hidden: true }, plans.el);
 const tabs = Tabs({
   tabs: [{ key: '3d', label: '3D 모델' }, { key: '2d', label: '2D 도면' }, { key: 'split', label: '분할' }],
   active: '3d',
   onChange: (key) => {
+    if (key === '2d') setFullscreen(false);
     view3d.hidden = key === '2d';
     view2d.hidden = key === '3d';
     stageBody.classList.toggle('l-stage__body--split', key === 'split');
@@ -79,10 +103,9 @@ const stageBody = h('div', { class: 'l-stage__body' }, view3d, view2d);
 const split = SplitDivider(stageBody, view3d, view2d);
 const divider = split.el;
 view2d.before(divider);
-const icon = (name) => h('img', { src: `assets/icons/${name}.svg`, alt: '', width: '24', height: '24' });
 const projectTitle = h('strong', {}, 'cad2bim');
 const projectSubtitle = h('span', {}, '도면을 열어 시작하세요');
-const drawingList = h('div', { class: 'c-drawing-list' }, h('p', { class: 'c-panel__empty' }, '원본 도면 없음'));
+const drawingList = h('div', { class: 'c-drawing-list' }, emptyDrawings());
 const drawingsPanel = Panel({ title: '원본 도면', children: [drawingList] });
 const documentsView = h('div', { class: 'c-sidebar-page', id: 'sidebar-documents' }, drawingsPanel.el, layersPanel.el);
 const displayView = h('div', { class: 'c-sidebar-page', id: 'sidebar-display', hidden: true },
@@ -224,6 +247,7 @@ async function showResult(useSample, took = '') {
     viewer.setFurniture(model.furniture);
     viewerEmpty.hidden = true;
     viewerHelp.el.hidden = false;
+    fullButton.hidden = false;
     cutFloor = null;
     updateModelTitle();
     renderLayers(floors);
@@ -236,7 +260,7 @@ async function showResult(useSample, took = '') {
     }, plan.name));
     planButtons.forEach((button, i) => { button.title = sourcePlans[i].name; });
     plans.onSelect = (i) => planButtons.forEach((button, j) => button.setAttribute('aria-pressed', String(i === j)));
-    drawingList.replaceChildren(...(planButtons.length ? planButtons : [h('p', { class: 'c-panel__empty' }, '원본 도면 없음')]));
+    drawingList.replaceChildren(...(planButtons.length ? planButtons : [emptyDrawings()]));
     plans.setPlans(sourcePlans);
     projectTitle.textContent = useSample ? '주민센터' : '변환 결과';
     projectSubtitle.textContent = useSample ? '샘플 프로젝트' : `${sourcePlans.length}개 원본 도면`;
@@ -245,6 +269,33 @@ async function showResult(useSample, took = '') {
   } catch (err) {
     progress.set({ state: 'error', message: err.message || String(err) });
   }
+}
+
+// 도면 초기화: 화면을 도면을 넣기 전으로 돌린다. 변환 결과 파일은 그대로 둔다('결과 열기'로 다시 열 수 있다).
+async function resetAll() {
+  if (started || !(await api.reset())) {
+    toast.show('변환 중에는 초기화할 수 없습니다. 끝난 뒤 다시 눌러 주세요.');
+    return;
+  }
+  clearInterval(ticker);
+  setFullscreen(false);
+  viewer.clear();
+  viewerEmpty.hidden = false;
+  viewerHelp.el.hidden = true;
+  fullButton.hidden = true;
+  cutFloor = null;
+  modelTitle.textContent = '3D · 모델 없음';
+  insideControls.replaceChildren();
+  insideControls.hidden = true;
+  layersPanel.setChildren([emptyLayers()]);
+  statsPanel.setChildren([h('div', { class: 'c-panel__empty' }, '-')]);
+  drawingList.replaceChildren(emptyDrawings());
+  plans.onSelect = null;
+  plans.setPlans([]);
+  projectTitle.textContent = 'cad2bim';
+  projectSubtitle.textContent = '도면을 열어 시작하세요';
+  progress.set({ state: 'idle', message: IDLE_MESSAGE });
+  tabs.select('3d');
 }
 
 function renderLayers(floors) {

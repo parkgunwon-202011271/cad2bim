@@ -52,6 +52,13 @@ class Api:
         self._emit({"type": "done"})
         return True
 
+    def reset(self) -> bool:
+        """화면을 도면을 넣기 전으로 돌린다. 결과 파일은 지우지 않는다. 변환 중이면 거절한다."""
+        if self._busy.locked():
+            return False
+        self._result = None
+        return True
+
     def convert_paths(self, paths: list[str]) -> None:
         if not self._busy.acquire(blocking=False):
             self._emit({"type": "error", "message": "이미 변환 중입니다. 끝난 뒤 다시 놓아 주세요."})

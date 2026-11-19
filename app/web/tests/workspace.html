@@ -82,6 +82,12 @@
     assert(Number(separator.getAttribute('aria-valuenow')) === 50, '더블클릭으로 반반 배치를 복원해야 합니다');
     const help = doc.querySelector('.c-input-help');
     assert(help?.querySelectorAll('svg').length === 3 && help.querySelector('kbd'), '마우스 그림과 키캡을 안내해야 합니다');
+    const full = doc.querySelector('.c-viewer__action');
+    assert(full && !full.hidden && doc.querySelector('.c-viewer-frame').contains(help), '전체화면 버튼과 조작 안내는 3D 뷰어 안에 있어야 합니다');
+    full.click();
+    assert(views[0].classList.contains('l-stage__view--full') && full.getAttribute('aria-pressed') === 'true', '전체화면으로 전환해야 합니다');
+    doc.body.dispatchEvent(new KeyboardEvent('keydown', { code: 'Escape', bubbles: true }));
+    assert(!views[0].classList.contains('l-stage__view--full') && full.getAttribute('aria-pressed') === 'false', 'Esc로 전체화면을 끝내야 합니다');
     help.querySelector('summary').click();
     assert(!help.open, '조작 안내를 접을 수 있어야 합니다');
     const person = [...doc.querySelectorAll('button')].find((el) => el.textContent === '사람 시점');
@@ -129,9 +135,14 @@
     frame.style.width = '1100px';
     await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
     assert(frame.contentWindow.getComputedStyle(doc.querySelector('.l-stage__body')).flexDirection === 'row', '넓은 화면에서 좌우 분할로 복원해야 합니다');
+    [...doc.querySelectorAll('button')].find((el) => el.textContent === '도면 초기화').click();
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    assert(caption.textContent.includes('모델 없음') && full.hidden && help.hidden, '도면 초기화 후 3D 영역이 처음 상태여야 합니다');
+    assert(!doc.querySelector('.c-drawing-list__item') && !doc.querySelector('.c-plan-viewer__chip') && !doc.querySelector('.c-floor-tree'), '도면 초기화 후 도면·층 목록이 비어야 합니다');
+    assert(!views[0].hidden && views[1].hidden && !doc.querySelector('.c-viewer__empty').hidden, '도면 초기화 후 3D 탭의 안내 문구로 돌아와야 합니다');
     floor.geometry.dispose();
     floor.material.dispose();
-    result.textContent = 'PASS: modes, sidebar, captions, split resize, input help, person mode, sample load, camera fit';
+    result.textContent = 'PASS: modes, sidebar, captions, split resize, fullscreen, input help, person mode, sample load, camera fit, reset';
   } catch (error) {
     result.textContent = `FAIL: ${error.message}`;
     throw error;

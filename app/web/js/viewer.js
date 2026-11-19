@@ -543,6 +543,26 @@ export class Viewer3D {
     return this.floors();
   }
 
+  /** 모델을 비워 아무것도 열지 않은 처음 상태로 돌린다. */
+  clear() {
+    if (this.person) this.leavePerson();
+    this.fly = null;
+    this.setFurniture(null);
+    this.clearStencils();
+    if (this.model) this.scene.remove(this.model);
+    this.model = null;
+    this.groups.clear();
+    this.clipped.clear();
+    this.levels.clear();
+    this.meshes = [];
+    this.walkable = [];
+    this.obstacles = [];
+    this.elevators = [];
+    this.ground = null;
+    this.state = { roof: true, site: true, furniture: true, hiddenFloors: new Set(), cut: null };
+    this.cap.visible = false;
+  }
+
   floors() {
     return [...this.groups.keys()]
       .filter((name) => FLOOR.test(name))

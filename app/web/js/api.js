@@ -41,6 +41,12 @@ export async function openResult() {
   return true;
 }
 
+/** 화면을 도면을 넣기 전으로 돌려도 되는지 Python에 묻고, 지금 결과를 잊게 한다. 변환 중이면 false. */
+export async function reset() {
+  if (mode === 'desktop') return (await window.pywebview.api.reset?.()) ?? true;
+  return true;
+}
+
 /** 일반 브라우저에서 놓았을 때. 데스크톱에서는 Python의 drop 처리기가 대신 받는다. */
 export function dropInBrowser() {
   if (mode === 'browser') simulateConvert();
