@@ -97,6 +97,14 @@
     person.click();
     assert(person.getAttribute('aria-pressed') === 'false' && caption.textContent.includes('단면'), '사람 시점 종료 후 단면 상태로 복귀해야 합니다');
     assert(!help.open, '모드를 바꿔도 접어 둔 안내를 유지해야 합니다');
+    const map = doc.querySelector('.c-minimap');
+    person.click();
+    assert(map && map.hidden, '미니맵은 전체화면이 아니면 숨겨야 합니다');
+    full.click();
+    assert(!map.hidden && map.querySelector('canvas').width > 100 && /층/.test(map.textContent), '전체화면 사람 시점에서는 서 있는 층의 미니맵을 보여야 합니다');
+    person.click();
+    assert(map.hidden, '사람 시점을 끝내면 미니맵을 숨겨야 합니다');
+    full.click();
     person.click();
     [...doc.querySelectorAll('button')].find((el) => el.textContent === '샘플 보기').click();
     await new Promise((resolve, reject) => {
@@ -142,7 +150,7 @@
     assert(!views[0].hidden && views[1].hidden && !doc.querySelector('.c-viewer__empty').hidden, '도면 초기화 후 3D 탭의 안내 문구로 돌아와야 합니다');
     floor.geometry.dispose();
     floor.material.dispose();
-    result.textContent = 'PASS: modes, sidebar, captions, split resize, fullscreen, input help, person mode, sample load, camera fit, reset';
+    result.textContent = 'PASS: modes, sidebar, captions, split resize, fullscreen, input help, person mode, minimap, sample load, camera fit, reset';
   } catch (error) {
     result.textContent = `FAIL: ${error.message}`;
     throw error;
