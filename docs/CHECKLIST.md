@@ -1,8 +1,11 @@
 # cad2bim 기능 검증 체크리스트
 
-기준일: 2026.11.19.  
-기준 브랜치: `xxrin/workspace-layout`  
-기준 커밋: `f3c5b59`, `c76fbcc`  
+기준일: 2026.11.19.
+
+기준 브랜치: `xxrin/workspace-layout`
+
+기준 커밋: `f3c5b59`, `c76fbcc`
+
 관련 문서: [남은 작업 및 우선순위](TODO.md)
 
 ## 01. 확인 범위와 판정 기준
