@@ -4,6 +4,8 @@
 
 설계와 규칙은 [상세설계.md](상세설계.md), 시험 데이터는 [data/public/README.md](data/public/README.md)를 보세요.
 
+현재 확인한 기능과 미검증 항목은 [기능 체크리스트](docs/CHECKLIST.md), 다음 작업과 완료 기준은 [TODO](docs/TODO.md)를 보세요.
+
 ## 다른 컴퓨터에서 설치
 
 Windows 11과 Python 3.11 이상만 있으면 됩니다. 패키지 버전은 `requirements.txt`에 고정되어 있고, DWG를 읽는 LibreDWG는 `third_party/libredwg`에 함께 들어 있습니다.
