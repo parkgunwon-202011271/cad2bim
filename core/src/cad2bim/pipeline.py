@@ -7,10 +7,11 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-from .config import load_layer_dictionary
+from .config import config_dir, load_layer_dictionary
 from .io import require_converter
 from .ir import IR, Level, SourceInfo
 from .layers import DictionaryClassifier, LayerMap, apply_overrides, drop_weak_walls, promote_inferred_walls
+from .layers.learned import apply_learned_roles
 from .layers.llm import apply_llm_roles
 from .preprocess import Preprocessed, preprocess
 from .preprocess.primitive import BBox
@@ -89,6 +90,9 @@ def convert(
         drop_weak_walls(layers, pre.primitives, cfg["walls"]["weak_wall_max_share"], cfg["walls"]["weak_wall_min_length_mm"])
         promote_inferred_walls(layers, infer_wall_layers(pre.primitives, layers, cfg["walls"]))
         layers.shape_walls = infer_walls_by_shape(pre.primitives, layers, cfg["walls"])
+        # 모양으로도 벽을 못 찾은 '모름' 레이어만 학습 예시로 채운다(켜져 있을 때만, 비용 없음).
+        # 먼저 채우면 '모름'이 '기타'가 되어 모양으로 벽을 찾는 단계가 그 레이어를 못 본다(물류 벽 1,198→1,029).
+        apply_learned_roles(layers, cfg, config_dir(), skip=layers.shape_walls)
     recognition = recognize(pre.primitives, layers, cfg, dictionary["hatch_patterns"])
 
     ir = build_ir(pre, floor_height, recognition)

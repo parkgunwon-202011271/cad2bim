@@ -323,3 +323,12 @@ llm:
     gemini: gemini-3.5-flash-lite   # 무료 등급에서 하루 500번·분당 15번까지 쓸 수 있는 모델
   requests_per_minute: 14    # 분당 호출 한도보다 조금 낮게. 0이면 쉬지 않는다
   max_layers_per_call: 150
+
+# 레이어 역할 학습 예시(처리 단계 3-a). 사전이 '모름'으로 둔 레이어만 가장 비슷한 예시의 역할로 채운다.
+# 기본은 꺼짐(시연 결과를 바꾸지 않기 위해). 켜려면 enabled: true 또는 환경 변수 CAD2BIM_LEARNED_LAYERS=1.
+# 비공개 도면에서 만든 예시는 저장소 밖 파일로 두고 CAD2BIM_LAYER_EXAMPLES(;로 구분)로 알려 준다.
+learned_layers:
+  enabled: false
+  examples: [layer_examples.json]   # config 폴더 기준. 공개 도면에서 만든 예시
+  k: 3                              # 가까운 예시 몇 개로 다수결할지
+  min_confidence: 0.6               # 그 밖의 역할은 이 비율 이상 같아야 쓴다. 벽·계단·문 등 형상 역할은 만장일치만

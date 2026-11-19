@@ -1,0 +1,355 @@
+{
+ "source": "주민센터 공개 도면, 레이어 역할은 Claude 판단(2026-11-19)",
+ "layers": [
+  {
+   "name": "A-ANNO-CIRC-CAR",
+   "role": "OTHER",
+   "kinds": {
+    "polyline": 4,
+    "hatch": 4
+   },
+   "mean_line_mm": null
+  },
+  {
+   "name": "A-ANNO-CIRC-PUBL",
+   "role": "OTHER",
+   "kinds": {
+    "polyline": 10,
+    "hatch": 10
+   },
+   "mean_line_mm": null
+  },
+  {
+   "name": "A-ANNO-CIRC-REST",
+   "role": "OTHER",
+   "kinds": {
+    "polyline": 18,
+    "hatch": 18
+   },
+   "mean_line_mm": null
+  },
+  {
+   "name": "A-ANNO-CIRC-VERT",
+   "role": "OTHER",
+   "kinds": {
+    "polyline": 10,
+    "hatch": 10
+   },
+   "mean_line_mm": null
+  },
+  {
+   "name": "A-ANNO-CIRC-WC",
+   "role": "OTHER",
+   "kinds": {
+    "polyline": 12,
+    "hatch": 12
+   },
+   "mean_line_mm": null
+  },
+  {
+   "name": "A-ANNO-DIMS",
+   "role": "DIM",
+   "kinds": {
+    "dimension": 88
+   },
+   "mean_line_mm": null
+  },
+  {
+   "name": "A-AREA-IDEN",
+   "role": "ROOM_TEXT",
+   "kinds": {
+    "text": 184
+   },
+   "mean_line_mm": null
+  },
+  {
+   "name": "A-DOOR",
+   "role": "DOOR",
+   "kinds": {
+    "arc": 106,
+    "line": 108,
+    "polyline": 2
+   },
+   "mean_line_mm": 829.5
+  },
+  {
+   "name": "A-FLOR-EDGE",
+   "role": "OTHER",
+   "kinds": {
+    "polyline": 2
+   },
+   "mean_line_mm": null
+  },
+  {
+   "name": "A-FLOR-FIXT",
+   "role": "FURNITURE",
+   "kinds": {
+    "polyline": 225,
+    "text": 16,
+    "ellipse": 60,
+    "circle": 20,
+    "line": 20
+   },
+   "mean_line_mm": 2719.9
+  },
+  {
+   "name": "A-FLOR-OPEN",
+   "role": "OTHER",
+   "kinds": {
+    "polyline": 14,
+    "line": 4
+   },
+   "mean_line_mm": 15637.1
+  },
+  {
+   "name": "A-FLOR-RAIL",
+   "role": "RAIL",
+   "kinds": {
+    "polyline": 6
+   },
+   "mean_line_mm": null
+  },
+  {
+   "name": "A-FLOR-STRS",
+   "role": "STAIR",
+   "kinds": {
+    "polyline": 19,
+    "text": 6,
+    "line": 136
+   },
+   "mean_line_mm": 1700.0
+  },
+  {
+   "name": "A-FURN",
+   "role": "FURNITURE",
+   "kinds": {
+    "polyline": 566,
+    "circle": 16,
+    "line": 3
+   },
+   "mean_line_mm": 1050.0
+  },
+  {
+   "name": "A-GLAZ",
+   "role": "WINDOW",
+   "kinds": {
+    "line": 305
+   },
+   "mean_line_mm": 2707.1
+  },
+  {
+   "name": "A-SITE-BLDL",
+   "role": "OTHER",
+   "kinds": {
+    "polyline": 5
+   },
+   "mean_line_mm": null
+  },
+  {
+   "name": "A-SITE-ELEV",
+   "role": "OTHER",
+   "kinds": {
+    "text": 35,
+    "line": 70
+   },
+   "mean_line_mm": 424.3
+  },
+  {
+   "name": "A-SITE-PROP",
+   "role": "OTHER",
+   "kinds": {
+    "polyline": 5,
+    "text": 5
+   },
+   "mean_line_mm": null
+  },
+  {
+   "name": "A-SITE-ROAD",
+   "role": "OTHER",
+   "kinds": {
+    "text": 4,
+    "polyline": 2,
+    "line": 2
+   },
+   "mean_line_mm": 13000.0
+  },
+  {
+   "name": "A-WALL",
+   "role": "WALL",
+   "kinds": {
+    "polyline": 195
+   },
+   "mean_line_mm": null
+  },
+  {
+   "name": "A-WALL-PATT",
+   "role": "HATCH",
+   "kinds": {
+    "hatch": 294
+   },
+   "mean_line_mm": null
+  },
+  {
+   "name": "C-PRKG",
+   "role": "OTHER",
+   "kinds": {
+    "circle": 8,
+    "text": 29,
+    "polyline": 4,
+    "line": 24
+   },
+   "mean_line_mm": 4566.7
+  },
+  {
+   "name": "C-PRKG-STRP",
+   "role": "OTHER",
+   "kinds": {
+    "polyline": 17,
+    "line": 14
+   },
+   "mean_line_mm": 2657.6
+  },
+  {
+   "name": "L-ANNO",
+   "role": "OTHER",
+   "kinds": {
+    "polyline": 12,
+    "circle": 3,
+    "text": 24
+   },
+   "mean_line_mm": null
+  },
+  {
+   "name": "L-LEVL",
+   "role": "OTHER",
+   "kinds": {
+    "polyline": 12,
+    "hatch": 12,
+    "text": 12
+   },
+   "mean_line_mm": null
+  },
+  {
+   "name": "L-PLNT",
+   "role": "OTHER",
+   "kinds": {
+    "polyline": 21,
+    "circle": 96
+   },
+   "mean_line_mm": null
+  },
+  {
+   "name": "L-RAIL",
+   "role": "OTHER",
+   "kinds": {
+    "circle": 9,
+    "line": 36
+   },
+   "mean_line_mm": 4358.9
+  },
+  {
+   "name": "L-STEP",
+   "role": "OTHER",
+   "kinds": {
+    "polyline": 21,
+    "line": 126
+   },
+   "mean_line_mm": 2621.6
+  },
+  {
+   "name": "L-STEP-THIN",
+   "role": "OTHER",
+   "kinds": {
+    "line": 60
+   },
+   "mean_line_mm": 2299.6
+  },
+  {
+   "name": "L-TACT",
+   "role": "OTHER",
+   "kinds": {
+    "polyline": 18,
+    "circle": 180
+   },
+   "mean_line_mm": null
+  },
+  {
+   "name": "S-COLS",
+   "role": "COLUMN",
+   "kinds": {
+    "polyline": 99
+   },
+   "mean_line_mm": null
+  },
+  {
+   "name": "S-GRID",
+   "role": "GRID",
+   "kinds": {
+    "line": 55
+   },
+   "mean_line_mm": 35281.8
+  },
+  {
+   "name": "S-GRID-IDEN",
+   "role": "GRID",
+   "kinds": {
+    "circle": 55,
+    "text": 55
+   },
+   "mean_line_mm": null
+  },
+  {
+   "name": "A-ANNO-CIRC-EGRS",
+   "role": "OTHER",
+   "kinds": {
+    "polyline": 2,
+    "hatch": 2
+   },
+   "mean_line_mm": null
+  },
+  {
+   "name": "A-ROOF",
+   "role": "OTHER",
+   "kinds": {
+    "polyline": 4
+   },
+   "mean_line_mm": null
+  },
+  {
+   "name": "A-ROOF-GLAZ",
+   "role": "WINDOW",
+   "kinds": {
+    "polyline": 2,
+    "line": 14
+   },
+   "mean_line_mm": 6000.0
+  },
+  {
+   "name": "A-ROOF-PLNT",
+   "role": "OTHER",
+   "kinds": {
+    "polyline": 12,
+    "hatch": 2
+   },
+   "mean_line_mm": null
+  },
+  {
+   "name": "A-ANNO-TTLB",
+   "role": "OTHER",
+   "kinds": {
+    "text": 6,
+    "line": 3
+   },
+   "mean_line_mm": 14000.0
+  },
+  {
+   "name": "A-ANNO-CIRC-STAF",
+   "role": "OTHER",
+   "kinds": {
+    "polyline": 1,
+    "hatch": 1
+   },
+   "mean_line_mm": null
+  }
+ ]
+}
