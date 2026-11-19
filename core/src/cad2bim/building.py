@@ -34,6 +34,7 @@ from .export.floor import floor_outlines
 from .export.floors import write_editable_files
 from .export.elevator import attach_elevators
 from .export.furniture import write_furniture
+from .export.room_areas import write_room_areas
 from .export.ifc import verify_ifc, write_ifc
 from .export.photoreal import HEIGHT as PHOTO_HEIGHT
 from .export.photoreal import WIDTH as PHOTO_WIDTH
@@ -1044,6 +1045,7 @@ def run_build(folder: Path, height: float | None = None, jobs: int = 1) -> str:
     dae_counts, expected = write_dae(storeys, dae_path, cfg["export"])
     dae_check = verify_dae(dae_path, expected)
     write_furniture(storeys, drawings, out_dir, cfg)
+    room_table = write_room_areas(storeys, drawings, out_dir, cfg)  # 실 면적표: 안목과 벽 중심선 기준, 도면 표기와의 차이
     if reviewed:
         from .review import locate_items
 
@@ -1108,6 +1110,7 @@ def run_build(folder: Path, height: float | None = None, jobs: int = 1) -> str:
     lines.append("dxf_check: " + " ".join(f"{k}={v}" for k, v in dxf_check.items()))
     lines.append("dxf_r2004_check: " + " ".join(f"{k}={v}" for k, v in old_dxf_check.items()))
     lines.extend(skp_lines)
+    lines.append("room_areas: " + " ".join(f"{k}={v}" for k, v in room_table.items()))
     lines.append("editable: " + " ".join(f"{k}={v}" for k, v in editable.items()))
     lines.append("aerial: " + " ".join(f"{k}={v}" for k, v in aerial.items()))
     lines.append("site: " + (" ".join(f"{k}={v}" for k, v in sorted(site_counts.items())) or "none"))

@@ -142,6 +142,8 @@ python -m cad2bim.cli compare-model ..\data\public\주민센터 "..\data\public\
 
 결과는 입력 폴더의 `_cad2bim_out`에 생깁니다. 현업에 전달할 파일은 `building_editable.skp`입니다. 설치가 맞다면 마지막 줄의 F1이 약 0.826으로 나옵니다.
 
+실 면적은 `rooms.csv`에 두 기준으로 나옵니다: 안목(벽 안쪽)과 벽 중심선 기준. 도면의 면적 표기는 대개 중심선 기준이라 안목 면적은 표기보다 10~20% 작습니다. 도면에 면적이 적힌 실은 중심선 면적과의 차이도 적습니다(주민센터 32실: 차이 중앙값 3.3%, 5% 안 24실). IFC의 `IfcSpace`에는 `Qto_SpaceBaseQuantities.NetFloorArea`(안목)와 `Cad2Bim_SpaceAreas.CenterlineFloorArea`(중심선)로 들어갑니다.
+
 ## 처리 단계와 LLM 도입 계획
 
 기본은 모든 단계가 규칙입니다. 아래는 LLM을 붙일 자리와 2026-11-19에 잰 정확도입니다. 아래 표의 측정은 Claude Opus 5.5가 대화 안에서 그림·텍스트만 보고 답한 뒤 정답과 맞춰 본 것입니다(1회, API·자동화 없음). API로 부르는 LLM은 'LLM 켜기'를 보세요.
