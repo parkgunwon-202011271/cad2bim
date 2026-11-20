@@ -58,8 +58,8 @@ def mode(cfg: dict[str, Any]) -> str:
     else:
         llm = cfg.get("llm") or {}
         value = str(llm.get("provider", "anthropic")).lower() if llm.get("enabled") else "off"
-    if value not in ("off", "cache", *PROVIDERS):
-        raise Cad2BimError(f"CAD2BIM_LLM 값을 알 수 없습니다: {value} (off, anthropic, gemini, cache)")
+    if value not in ("off", "cache", "ml", *PROVIDERS):
+        raise Cad2BimError(f"CAD2BIM_LLM 값을 알 수 없습니다: {value} (off, cache, ml, anthropic, gemini, openai)")
     return value
 
 

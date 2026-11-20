@@ -737,6 +737,10 @@ def review(storeys: list[Any], drawings: dict[str, Path], out_dir: Path, cfg: di
         if which in PROVIDERS:
             configure(cfg)
             decisions.update(ask_llm(missing, images, which, default_model(cfg, which), directory, evidence))
+        elif which == "ml":  # LLM 자리에 학습 모델. 답은 저장하지 않고 빌드마다 다시 계산한다(모델이 바뀌면 바로 반영)
+            from .review_ml import decide
+
+            decisions.update(decide(missing, evidence, cfg))
 
     # 묻고 나서 적용한다. 거꾸로 하면 새로 받은 답이 다음 빌드에서야 쓰인다.
     ask_missing(spots)

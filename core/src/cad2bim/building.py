@@ -1036,6 +1036,9 @@ def run_build(folder: Path, height: float | None = None, jobs: int = 1) -> str:
     handed = hand_over_to_partial(storeys, cfg["export"])  # 부분층 바닥 아래 벽은 그 바닥에서 멈춘다(계산)
     layered = doors_through_layers(storeys)  # 두 겹 벽의 다른 겹에도 문을 뚫는다(계산)
     attach_elevators(storeys, drawings, out_dir, cfg)  # 승강로 바닥 뚫기(plan_floors)와 앱 표시에 쓴다
+    for s in storeys:  # 검토·계산을 마친 층별 IR. 평가(개수·위치 비교)와 디버깅에 쓴다
+        (out_dir / s.part.part_id).mkdir(parents=True, exist_ok=True)
+        (out_dir / s.part.part_id / "ir_built.json").write_text(json.dumps(s.part.ir, ensure_ascii=False, default=str), encoding="utf-8")
     site_counts = attach_site(storeys, folder, cfg, notes)
     ifc_path = out_dir / "building.ifc"
     counts = write_ifc(storeys, ifc_path, cfg["export"])

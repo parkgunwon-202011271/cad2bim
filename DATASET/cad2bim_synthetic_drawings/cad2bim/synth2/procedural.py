@@ -124,6 +124,13 @@ def _core(plan: Plan, rng, x0, y0, w, h, floor_level, top: bool, style: dict):
 
 
 def _grid(rng, kind):
+    if kind == "logistics_xl":  # 초대형 물류센터: 110~240m
+        sx, sy = rng.choice([11000, 12000]), rng.choice([10000, 11000, 12000])
+        nx, ny = rng.randint(10, 20), rng.randint(5, 8)
+        return [i * sx for i in range(nx + 1)], [j * sy for j in range(ny + 1)]
+    if kind == "residential":  # 복도식 공동주택: 세대 폭 7.2~9m
+        sx = rng.choice([7200, 8100, 9000])
+        return [i * sx for i in range(rng.randint(5, 9) + 1)], [0, 9000, 10800]
     if kind == "warehouse":
         sx, sy = rng.choice([9000, 10000, 11000]), rng.choice([9000, 10000, 11000])
         nx, ny = rng.randint(5, 8), rng.randint(3, 5)
@@ -138,12 +145,17 @@ def _grid(rng, kind):
 def building(seed: int, kind: str | None = None) -> dict:
     """건물 하나: 층마다 레이아웃(dict) 목록과 건물 정보."""
     rng = random.Random(seed)
-    kind = kind or rng.choice(["office", "office", "warehouse"])
+    kind = kind or rng.choice(["office", "office", "public", "public", "warehouse", "residential", "residential", "logistics_xl"])
+    base = {"public": "office", "logistics_xl": "warehouse", "residential": "office"}.get(kind, kind)
     gx, gy = _grid(rng, kind)
+    variant, kind = kind, base
     floors = rng.randint(2, 4) if kind == "office" else rng.randint(2, 3)
     height = rng.choice([3900, 4200, 4500]) if kind == "office" else rng.choice([7500, 9000, 10000])
-    b = {"id": f"S{seed:04d}", "kind": kind, "floors": floors, "floor_height": height,
-         "name": {"office": "가상 업무·공공 시설", "warehouse": "가상 물류창고"}[kind]}
+    if variant == "residential":
+        floors, height = rng.randint(2, 5), rng.choice([2800, 2900])
+    b = {"id": f"S{seed:04d}", "kind": variant, "floors": floors, "floor_height": height,
+         "name": {"office": "가상 업무 시설", "public": "가상 공공 시설", "warehouse": "가상 물류창고",
+                  "logistics_xl": "가상 대형 물류센터", "residential": "가상 공동주택"}[variant]}
     style = {
         "ext_t": 250 if kind == "office" else 150, "ext_mat": RC if kind == "office" else BLOCK,
         "core_t": 200, "part_t": rng.choice([100, 150]), "ev_count": rng.choice([1, 2]),
@@ -151,7 +163,8 @@ def building(seed: int, kind: str | None = None) -> dict:
     }
     W, H = gx[-1], gy[-1]
     core_w = gx[1] if gx[1] >= 6000 else gx[2]
-    pilotis = kind == "office" and rng.random() < 0.4
+    pilotis = kind == "office" and variant != "residential" and rng.random() < (0.8 if variant == "public" else 0.6)
+    double = kind == "warehouse" or rng.random() < 0.4  # 겹벽 외벽(패널 + 안쪽 벽)
     setback = kind == "office" and floors >= 3 and rng.random() < 0.5
     layouts = []
     for f in range(1, floors + 1):
@@ -173,6 +186,12 @@ def building(seed: int, kind: str | None = None) -> dict:
             p.wall((piloti_span[0], 0), (piloti_span[0], gy[1]), style["ext_t"], style["ext_mat"])
             p.wall((piloti_span[1], 0), (piloti_span[1], gy[1]), style["ext_t"], style["ext_mat"])
             _place_door(p, rng, inner, ((piloti_span[0] + piloti_span[1]) / 2, gy[1]), 1800, (0, 1), "double_door")
+        elif f == 1 and variant != "residential" and rng.random() < (0.7 if variant == "public" else 0.4) and len(gx) > 4:
+            # 바깥으로 열린 면(보행통로·광장 쪽): 외벽 한 칸을 비우고 필로티처럼 '트임' 정답으로 기록한다
+            a, c = gx[2], gx[3]
+            south += [((0, 0), (a, 0)), ((c, 0), (x_end, 0))]
+            p.pilotis.append({"p1": [a, 0], "p2": [c, 0]})
+            p.levels.append((rng.choice(["출입 광장", "보행통로 (비가림)", "주차장", "차로 6,000"]), ((a + c) / 2, -2500)))
         else:
             south.append(((0, 0), (x_end, 0)))
         ext = [p.wall(a, c, style["ext_t"], style["ext_mat"]) for a, c in south]
@@ -186,8 +205,10 @@ def building(seed: int, kind: str | None = None) -> dict:
             p.wall((0, core_h), (core_w, core_h), style["core_t"], RC)
         core_door_wall = p.walls[-1][0]
         _place_door(p, rng, core_door_wall, (core_w, gy[1] + 1500 if len(gy) > 2 else H / 2), 1000, (1, 0))
-        if kind == "office":
-            _office_rooms(p, rng, core_w, x_end, H, gx, style, f)
+        if variant == "residential":
+            _residential_rooms(p, rng, core_w, x_end, H, gx, style)
+        elif kind == "office":
+            _office_rooms(p, rng, core_w, x_end, H, gx, style, f, public=variant == "public")
         else:
             _warehouse_rooms(p, rng, core_w, x_end, H, gx, style, f, ext)
         # 외벽 창
@@ -207,12 +228,13 @@ def building(seed: int, kind: str | None = None) -> dict:
             # 정문(양개문)과 출입 홀
             sx = gx[2] + (gx[3] - gx[2]) / 2 if len(gx) > 3 else core_w + 3000
             _place_door(p, rng, ext[0], (sx, 0), 1800, (0, 1), "double_door")
+        roughen(p, rng, style, double, ext + [east, north, west], (x_end / 2, H / 2))
         layouts.append(p.layout(b))
     layouts.append(_roof(b, gx, gy, core_w, W if not setback else W, style))
     return {"building": b, "layouts": layouts}
 
 
-def _office_rooms(p: Plan, rng, core_w, x_end, H, gx, style, f):
+def _office_rooms(p: Plan, rng, core_w, x_end, H, gx, style, f, public=False):
     """복도 양쪽에 실을 나눈다. 회의실은 복도에 실내 유리, 로비는 복도로 넓게 트인다."""
     cy = H / 2
     cw = rng.choice([2000, 2400])
@@ -223,6 +245,8 @@ def _office_rooms(p: Plan, rng, core_w, x_end, H, gx, style, f):
     xs = [x for x in gx if core_w < x < x_end]
     bays = [core_w] + xs + [x_end]
     names = ["사무실", "회의실", "자료실", "상담실", "다목적실", "창고", "직원휴게실"]
+    if public:
+        names = ["민원실", "주민자치위원회실", "다목적홀", "북카페", "작은도서관", "프로그램실", "소회의실", "창고"]
     for side, wall_id, y0, y1, into in (("S", south_wall, 0, cy - cw / 2, (0, -1)), ("N", north_wall, cy + cw / 2, H, (0, 1))):
         # 두 칸씩 묶은 실도 만든다
         i = 0
@@ -236,6 +260,10 @@ def _office_rooms(p: Plan, rng, core_w, x_end, H, gx, style, f):
                 # 로비: 복도로 넓게 트인 통로(문짝 없음)
                 name = "로비"
                 p.opening("open", wall_id, ((xa + xb) / 2, y1 if into == (0, -1) else y0), min(xb - xa - 1200, 3600))
+            elif xb - xa > 4000 and rng.random() < (0.4 if public else 0.25):
+                # 문짝 없이 트인 통로(1.2~3m). 실제 도면(주민센터)의 틀린 판정 7곳이 전부 이런 '트임'이었다
+                p.opening("open", wall_id, (xa + rng.uniform(1500, xb - xa - 1500), y1 if into == (0, -1) else y0),
+                          rng.choice([1200, 1600, 2000, 3000]))
             else:
                 door_x = xa + rng.uniform(900, max(1000, xb - xa - 900))
                 kind = "double_door" if xb - xa > 12000 and rng.random() < 0.5 else "door"
@@ -249,6 +277,32 @@ def _office_rooms(p: Plan, rng, core_w, x_end, H, gx, style, f):
             if name in ("회의실", "다목적실"):
                 p.fixtures.append(("TABLE4", ((xa + xb) / 2, (y0 + y1) / 2 - 900), 0))
             i = j
+
+
+def _residential_rooms(p: Plan, rng, core_w, x_end, H, gx, style):
+    """복도식 공동주택: 북쪽 복도(1.8m), 남쪽에 세대 반복. 세대마다 현관문, 침실·욕실 문, 발코니 미닫이 창."""
+    t = style["part_t"]
+    cy = H - 1800
+    corridor = p.wall((core_w, cy), (x_end, cy), 200, RC)
+    p.rooms.append(("복도", ((core_w + x_end) / 2, cy + 900)))
+    xs = [x for x in gx if core_w < x < x_end]
+    for a, c in zip([core_w] + xs, xs + [x_end]):
+        if c < x_end:
+            p.wall((c, 0), (c, cy), 200, RC)  # 세대 경계벽
+        _place_door(p, rng, corridor, (a + 1200, cy), 900, (0, -1))  # 현관문
+        bed_y = cy - 3600
+        bw = p.wall((a, bed_y), (a + (c - a) * 0.55, bed_y), t, BLOCK)
+        p.wall((a + (c - a) * 0.55, bed_y), (a + (c - a) * 0.55, cy), t, BLOCK)
+        _place_door(p, rng, bw, (a + (c - a) * 0.3, bed_y), 900, (0, 1))
+        p.rooms.append(("침실", (a + (c - a) * 0.27, bed_y + 1800)))
+        bath = p.wall((a + (c - a) * 0.55, cy - 2200), (c, cy - 2200), t, BLOCK)
+        p.opening("sliding" if rng.random() < 0.5 else "door", bath, (a + (c - a) * 0.75, cy - 2200), 800,
+                  *((rng.choice([-1, 1]), (0, 1)) if True else ()))
+        p.rooms.append(("욕실", (a + (c - a) * 0.78, cy - 1100)))
+        p.rooms.append(("거실", ((a + c) / 2, 2500)))
+        bal = p.wall((a, 1500), (c, 1500), t, BLOCK)  # 발코니 창(미닫이 큰 창)
+        p.opening("window", bal, ((a + c) / 2, 1500), min(c - a - 1200, 4800))
+        p.rooms.append(("발코니", ((a + c) / 2, 750)))
 
 
 def _warehouse_rooms(p: Plan, rng, core_w, x_end, H, gx, style, f, ext):
@@ -269,6 +323,14 @@ def _warehouse_rooms(p: Plan, rng, core_w, x_end, H, gx, style, f, ext):
     p.opening("glass", oy, (ox + 5000, H - 7000), 3000)
     p.rooms.append(("사무실", ((ox + x_end) / 2, H - 3500)))
     p.rooms.append(("창고", ((core_w + ox) / 2, H / 2)))
+    if f == 1 and len(gx) > 4:
+        # 하역장과 창고 사이: 넓게 트인 통로(문짝 없음)가 있는 칸막이
+        dy = 7000
+        wall = p.wall((core_w, dy), (ox, dy), style["part_t"], BLOCK)
+        xs = [x for x in gx if core_w < x < ox]
+        for a, c in zip([core_w] + xs, xs + [ox]):
+            if c - a > 6000 and rng.random() < 0.6:
+                p.opening("open", wall, ((a + c) / 2, dy), min(c - a - 1500, 5000))
 
 
 def _roof(b, gx, gy, core_w, W, style) -> dict:
@@ -285,3 +347,62 @@ def _roof(b, gx, gy, core_w, W, style) -> dict:
     p.rooms.append(("계단탑", (core_w / 2, 600)))
     p.rooms.append(("지붕", ((core_w + W) / 2, gy[-1] / 2)))
     return p.layout(b)
+
+
+def _inward(p1, p2, center):
+    """벽 p1→p2의 법선 중 건물 중심 쪽."""
+    (ax, ay), (bx, by) = p1, p2
+    L = ((bx - ax) ** 2 + (by - ay) ** 2) ** 0.5 or 1.0
+    n = (-(by - ay) / L, (bx - ax) / L)
+    mx, my = (ax + bx) / 2, (ay + by) / 2
+    if (center[0] - mx) * n[0] + (center[1] - my) * n[1] < 0:
+        n = (-n[0], -n[1])
+    return n
+
+
+def roughen(p: Plan, rng, style, double: bool, ext_ids: list, center):
+    """실무 도면의 지저분함: 겹벽 외벽, 기둥 옆에서 짧게 끊긴 칸막이, 모서리에서 비켜 끝난 외벽.
+
+    정답은 그대로다(끊긴 곳도 벽이 이어져야 하는 곳, 겹벽 사이도 벽). 검토 지점의 '벽' 예시를 만든다.
+    """
+    walls = {w[0]: w for w in p.walls}
+    if double:
+        gap = rng.choice([150, 200, 250, 300])
+        for wid in ext_ids:
+            w = walls.get(wid)
+            if w is None:
+                continue
+            n = _inward(w[1], w[2], center)
+            d = w[3] / 2 + gap + 100
+            q1 = (w[1][0] + n[0] * d, w[1][1] + n[1] * d)
+            q2 = (w[2][0] + n[0] * d, w[2][1] + n[1] * d)
+            inner = p.wall(q1, q2, 200, RC)
+            for o in [o for o in p.openings if o[2] == wid]:
+                c = (o[3][0] + n[0] * d, o[3][1] + n[1] * d)
+                if o[1] in ("door", "double_door", "access_door") and len(o) > 5:
+                    p.opening(o[1], inner, c, o[4], o[5], o[6])
+                else:
+                    p.opening(o[1], inner, c, o[4])
+    # 칸막이 끝을 기둥 옆에서 짧게(15~50cm), 외벽 끝을 모서리에서 비켜(30~70cm)
+    used = {o[2] for o in p.openings}
+    out = []
+    for w in p.walls:
+        wid, a, c, th, mat = w
+        L = ((c[0] - a[0]) ** 2 + (c[1] - a[1]) ** 2) ** 0.5
+        cut = 0.0
+        if mat == BLOCK and wid not in ext_ids and rng.random() < 0.35:
+            cut = rng.uniform(150, 500)
+        elif wid in ext_ids and rng.random() < 0.25:
+            cut = rng.uniform(300, 700)
+        if cut and L > 3 * cut + 2000:
+            u = ((c[0] - a[0]) / L, (c[1] - a[1]) / L)
+            if rng.random() < 0.5:
+                a = (a[0] + u[0] * cut, a[1] + u[1] * cut)
+                shift = cut
+            else:
+                c = (c[0] - u[0] * cut, c[1] - u[1] * cut)
+                shift = 0.0
+            if wid in used and shift:  # 문 위치가 벽 시작점 기준이 아니라 좌표라 그대로 둬도 된다
+                pass
+        out.append((wid, a, c, th, mat))
+    p.walls[:] = out

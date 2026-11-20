@@ -332,3 +332,7 @@ learned_layers:
   examples: [layer_examples.json]   # config 폴더 기준. 공개 도면에서 만든 예시
   k: 3                              # 가까운 예시 몇 개로 다수결할지
   min_confidence: 0.6               # 그 밖의 역할은 이 비율 이상 같아야 쓴다. 벽·계단·문 등 형상 역할은 만장일치만
+
+review_ml:
+  path: models/spot_model.joblib   # CAD2BIM_LLM=ml 일 때 쓰는 틈 판정 모델(저장소 기준 경로). CAD2BIM_SPOT_MODEL이 먼저
+  min_prob: 0.5                     # 이보다 확신이 낮으면 답하지 않고 대기 목록에 둔다

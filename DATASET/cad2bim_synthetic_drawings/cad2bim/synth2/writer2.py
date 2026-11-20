@@ -100,6 +100,7 @@ class Writer2(base.Writer):
                     hinge = (ends[0] if hinge_end < 0 else ends[1]) + face
                     other = (ends[1] if hinge_end < 0 else ends[0]) + face
                     self._door(hinge, other, swing, width, t, explode)
+                    rec["hinge"] = [round(hinge.x), round(hinge.y)]
                 rec["swing_dir"] = [swing.x, swing.y]
             elif kind == "sliding":
                 for k, off in ((-1, t / 6), (1, -t / 6)):  # 두 짝이 겹쳐 미끄러진다(호 없음)
@@ -231,6 +232,7 @@ def main():
     ap.add_argument("--seed", type=int, default=1)
     ap.add_argument("--kind", default=None, choices=[None, "office", "warehouse"])
     ap.add_argument("--out", default="../out2")
+    ap.add_argument("--bench", action="store_true", help="평가 틀(cad2bim benchmark)용 정답과 매니페스트도 쓴다")
     args = ap.parse_args()
     root = Path(args.out)
     for k in range(args.n):
@@ -248,7 +250,33 @@ def main():
             Writer2(name, L, cfg, seed * 31 + i).run(folder)
         (folder / "building.json").write_text(json.dumps({**b, "style": cfg}, ensure_ascii=False, indent=1), encoding="utf-8")
         print("wrote", folder, b["kind"], b["floors"], "floors", cfg["scheme"], "xref" if cfg["xref"] else "")
+        if args.bench:
+            bench_truth(folder)
+    if args.bench:
+        manifest(root)
 
+
+
+def bench_truth(folder: Path) -> None:
+    """평가 틀용 정답(*.bench.json): 문·창 종류를 door/window로 묶고, 문짝 없는 열린 통로는 뺀다."""
+    for f in folder.glob("*.truth.json"):
+        d = json.loads(f.read_text(encoding="utf-8"))
+        d["openings"] = [{**o, "kind": o["label"]} for o in d["openings"] if o["label"] in ("door", "window")]
+        f.with_name(f.name.replace(".truth.json", ".bench.json")).write_text(json.dumps(d, ensure_ascii=False), encoding="utf-8")
+
+
+def manifest(root: Path) -> None:
+    """cad2bim benchmark 매니페스트. 지붕층은 파라펫뿐이라 뺀다."""
+    lines = ["# synth2 평가 세트(자동 생성). 학습·튜닝에 쓰지 않은 건물이다.", "name: synth2", f"root: {root.resolve().as_posix()}",
+             "floor_height: 3000", "", "drawings:"]
+    for t in sorted(root.glob("S*/*.bench.json")):
+        if "지붕층" in t.name:
+            continue
+        rel = t.relative_to(root).as_posix()
+        dxf = rel.replace(".bench.json", ".dxf")
+        lines.append(f"  - {{id: {t.parent.name}_{t.name.split()[0]}, dxf: '{dxf}', truth: '{rel}', split: test, gated: false}}")
+    lines += ["", "gates: {}"]
+    (root / "synth2_bench.yaml").write_text("\n".join(lines) + "\n", encoding="utf-8")
 
 if __name__ == "__main__":
     main()
