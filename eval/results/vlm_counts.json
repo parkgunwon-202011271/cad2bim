@@ -1,0 +1,412 @@
+{
+ "plans": [
+  "S5000_A-101",
+  "S5000_A-102",
+  "S5000_A-103",
+  "S5000_A-104",
+  "S5001_A-101",
+  "S5001_A-102",
+  "S5002_A-101",
+  "S5002_A-102",
+  "S5002_A-103",
+  "S5003_A-101",
+  "S5003_A-102",
+  "S5003_A-103",
+  "S5003_A-104",
+  "S5004_A-101",
+  "S5004_A-102",
+  "S5004_A-103",
+  "S5005_A-101",
+  "S5005_A-102",
+  "S5005_A-103",
+  "S5006_A-101"
+ ],
+ "rows": [
+  {
+   "id": "S5000_A-101",
+   "truth": {
+    "doors": 18,
+    "windows": 36
+   },
+   "ours": {
+    "doors": 18,
+    "windows": 63
+   },
+   "png": "C:\\Users\\pw710\\AppData\\Local\\Temp\\claude\\b462510b52b73ca0\\fba98151-c538-41fa-99ad-b3a360dc68c8\\scratchpad\\vlm\\img\\S5000_A-101.png"
+  },
+  {
+   "id": "S5000_A-102",
+   "truth": {
+    "doors": 17,
+    "windows": 46
+   },
+   "ours": {
+    "doors": 15,
+    "windows": 76
+   },
+   "png": "C:\\Users\\pw710\\AppData\\Local\\Temp\\claude\\b462510b52b73ca0\\fba98151-c538-41fa-99ad-b3a360dc68c8\\scratchpad\\vlm\\img\\S5000_A-102.png"
+  },
+  {
+   "id": "S5000_A-103",
+   "truth": {
+    "doors": 18,
+    "windows": 32
+   },
+   "ours": {
+    "doors": 17,
+    "windows": 58
+   },
+   "png": "C:\\Users\\pw710\\AppData\\Local\\Temp\\claude\\b462510b52b73ca0\\fba98151-c538-41fa-99ad-b3a360dc68c8\\scratchpad\\vlm\\img\\S5000_A-103.png"
+  },
+  {
+   "id": "S5000_A-104",
+   "truth": {
+    "doors": 16,
+    "windows": 34
+   },
+   "ours": {
+    "doors": 15,
+    "windows": 58
+   },
+   "png": "C:\\Users\\pw710\\AppData\\Local\\Temp\\claude\\b462510b52b73ca0\\fba98151-c538-41fa-99ad-b3a360dc68c8\\scratchpad\\vlm\\img\\S5000_A-104.png"
+  },
+  {
+   "id": "S5001_A-101",
+   "truth": {
+    "doors": 18,
+    "windows": 21
+   },
+   "ours": {
+    "doors": 14,
+    "windows": 0
+   },
+   "png": "C:\\Users\\pw710\\AppData\\Local\\Temp\\claude\\b462510b52b73ca0\\fba98151-c538-41fa-99ad-b3a360dc68c8\\scratchpad\\vlm\\img\\S5001_A-101.png"
+  },
+  {
+   "id": "S5001_A-102",
+   "truth": {
+    "doors": 8,
+    "windows": 35
+   },
+   "ours": {
+    "doors": 5,
+    "windows": 0
+   },
+   "png": "C:\\Users\\pw710\\AppData\\Local\\Temp\\claude\\b462510b52b73ca0\\fba98151-c538-41fa-99ad-b3a360dc68c8\\scratchpad\\vlm\\img\\S5001_A-102.png"
+  },
+  {
+   "id": "S5002_A-101",
+   "truth": {
+    "doors": 14,
+    "windows": 19
+   },
+   "ours": {
+    "doors": 2,
+    "windows": 19
+   },
+   "png": "C:\\Users\\pw710\\AppData\\Local\\Temp\\claude\\b462510b52b73ca0\\fba98151-c538-41fa-99ad-b3a360dc68c8\\scratchpad\\vlm\\img\\S5002_A-101.png"
+  },
+  {
+   "id": "S5002_A-102",
+   "truth": {
+    "doors": 8,
+    "windows": 15
+   },
+   "ours": {
+    "doors": 4,
+    "windows": 19
+   },
+   "png": "C:\\Users\\pw710\\AppData\\Local\\Temp\\claude\\b462510b52b73ca0\\fba98151-c538-41fa-99ad-b3a360dc68c8\\scratchpad\\vlm\\img\\S5002_A-102.png"
+  },
+  {
+   "id": "S5002_A-103",
+   "truth": {
+    "doors": 8,
+    "windows": 7
+   },
+   "ours": {
+    "doors": 4,
+    "windows": 7
+   },
+   "png": "C:\\Users\\pw710\\AppData\\Local\\Temp\\claude\\b462510b52b73ca0\\fba98151-c538-41fa-99ad-b3a360dc68c8\\scratchpad\\vlm\\img\\S5002_A-103.png"
+  },
+  {
+   "id": "S5003_A-101",
+   "truth": {
+    "doors": 16,
+    "windows": 23
+   },
+   "ours": {
+    "doors": 14,
+    "windows": 25
+   },
+   "png": "C:\\Users\\pw710\\AppData\\Local\\Temp\\claude\\b462510b52b73ca0\\fba98151-c538-41fa-99ad-b3a360dc68c8\\scratchpad\\vlm\\img\\S5003_A-101.png"
+  },
+  {
+   "id": "S5003_A-102",
+   "truth": {
+    "doors": 17,
+    "windows": 21
+   },
+   "ours": {
+    "doors": 15,
+    "windows": 22
+   },
+   "png": "C:\\Users\\pw710\\AppData\\Local\\Temp\\claude\\b462510b52b73ca0\\fba98151-c538-41fa-99ad-b3a360dc68c8\\scratchpad\\vlm\\img\\S5003_A-102.png"
+  },
+  {
+   "id": "S5003_A-103",
+   "truth": {
+    "doors": 16,
+    "windows": 24
+   },
+   "ours": {
+    "doors": 14,
+    "windows": 25
+   },
+   "png": "C:\\Users\\pw710\\AppData\\Local\\Temp\\claude\\b462510b52b73ca0\\fba98151-c538-41fa-99ad-b3a360dc68c8\\scratchpad\\vlm\\img\\S5003_A-103.png"
+  },
+  {
+   "id": "S5003_A-104",
+   "truth": {
+    "doors": 17,
+    "windows": 24
+   },
+   "ours": {
+    "doors": 15,
+    "windows": 26
+   },
+   "png": "C:\\Users\\pw710\\AppData\\Local\\Temp\\claude\\b462510b52b73ca0\\fba98151-c538-41fa-99ad-b3a360dc68c8\\scratchpad\\vlm\\img\\S5003_A-104.png"
+  },
+  {
+   "id": "S5004_A-101",
+   "truth": {
+    "doors": 14,
+    "windows": 18
+   },
+   "ours": {
+    "doors": 12,
+    "windows": 34
+   },
+   "png": "C:\\Users\\pw710\\AppData\\Local\\Temp\\claude\\b462510b52b73ca0\\fba98151-c538-41fa-99ad-b3a360dc68c8\\scratchpad\\vlm\\img\\S5004_A-101.png"
+  },
+  {
+   "id": "S5004_A-102",
+   "truth": {
+    "doors": 13,
+    "windows": 31
+   },
+   "ours": {
+    "doors": 12,
+    "windows": 60
+   },
+   "png": "C:\\Users\\pw710\\AppData\\Local\\Temp\\claude\\b462510b52b73ca0\\fba98151-c538-41fa-99ad-b3a360dc68c8\\scratchpad\\vlm\\img\\S5004_A-102.png"
+  },
+  {
+   "id": "S5004_A-103",
+   "truth": {
+    "doors": 12,
+    "windows": 24
+   },
+   "ours": {
+    "doors": 10,
+    "windows": 41
+   },
+   "png": "C:\\Users\\pw710\\AppData\\Local\\Temp\\claude\\b462510b52b73ca0\\fba98151-c538-41fa-99ad-b3a360dc68c8\\scratchpad\\vlm\\img\\S5004_A-103.png"
+  },
+  {
+   "id": "S5005_A-101",
+   "truth": {
+    "doors": 14,
+    "windows": 15
+   },
+   "ours": {
+    "doors": 11,
+    "windows": 22
+   },
+   "png": "C:\\Users\\pw710\\AppData\\Local\\Temp\\claude\\b462510b52b73ca0\\fba98151-c538-41fa-99ad-b3a360dc68c8\\scratchpad\\vlm\\img\\S5005_A-101.png"
+  },
+  {
+   "id": "S5005_A-102",
+   "truth": {
+    "doors": 13,
+    "windows": 33
+   },
+   "ours": {
+    "doors": 10,
+    "windows": 51
+   },
+   "png": "C:\\Users\\pw710\\AppData\\Local\\Temp\\claude\\b462510b52b73ca0\\fba98151-c538-41fa-99ad-b3a360dc68c8\\scratchpad\\vlm\\img\\S5005_A-102.png"
+  },
+  {
+   "id": "S5005_A-103",
+   "truth": {
+    "doors": 13,
+    "windows": 34
+   },
+   "ours": {
+    "doors": 11,
+    "windows": 59
+   },
+   "png": "C:\\Users\\pw710\\AppData\\Local\\Temp\\claude\\b462510b52b73ca0\\fba98151-c538-41fa-99ad-b3a360dc68c8\\scratchpad\\vlm\\img\\S5005_A-103.png"
+  },
+  {
+   "id": "S5006_A-101",
+   "truth": {
+    "doors": 13,
+    "windows": 9
+   },
+   "ours": {
+    "doors": 11,
+    "windows": 9
+   },
+   "png": "C:\\Users\\pw710\\AppData\\Local\\Temp\\claude\\b462510b52b73ca0\\fba98151-c538-41fa-99ad-b3a360dc68c8\\scratchpad\\vlm\\img\\S5006_A-101.png"
+  },
+  {
+   "id": "S5006_A-102",
+   "truth": {
+    "doors": 14,
+    "windows": 14
+   },
+   "ours": {
+    "doors": 12,
+    "windows": 15
+   },
+   "png": "C:\\Users\\pw710\\AppData\\Local\\Temp\\claude\\b462510b52b73ca0\\fba98151-c538-41fa-99ad-b3a360dc68c8\\scratchpad\\vlm\\img\\S5006_A-102.png"
+  },
+  {
+   "id": "S5006_A-103",
+   "truth": {
+    "doors": 12,
+    "windows": 13
+   },
+   "ours": {
+    "doors": 10,
+    "windows": 9
+   },
+   "png": "C:\\Users\\pw710\\AppData\\Local\\Temp\\claude\\b462510b52b73ca0\\fba98151-c538-41fa-99ad-b3a360dc68c8\\scratchpad\\vlm\\img\\S5006_A-103.png"
+  },
+  {
+   "id": "S5007_A-101",
+   "truth": {
+    "doors": 16,
+    "windows": 19
+   },
+   "ours": {
+    "doors": 15,
+    "windows": 21
+   },
+   "png": "C:\\Users\\pw710\\AppData\\Local\\Temp\\claude\\b462510b52b73ca0\\fba98151-c538-41fa-99ad-b3a360dc68c8\\scratchpad\\vlm\\img\\S5007_A-101.png"
+  },
+  {
+   "id": "S5007_A-102",
+   "truth": {
+    "doors": 15,
+    "windows": 18
+   },
+   "ours": {
+    "doors": 14,
+    "windows": 22
+   },
+   "png": "C:\\Users\\pw710\\AppData\\Local\\Temp\\claude\\b462510b52b73ca0\\fba98151-c538-41fa-99ad-b3a360dc68c8\\scratchpad\\vlm\\img\\S5007_A-102.png"
+  },
+  {
+   "id": "S5008_A-101",
+   "truth": {
+    "doors": 16,
+    "windows": 14
+   },
+   "ours": {
+    "doors": 15,
+    "windows": 17
+   },
+   "png": "C:\\Users\\pw710\\AppData\\Local\\Temp\\claude\\b462510b52b73ca0\\fba98151-c538-41fa-99ad-b3a360dc68c8\\scratchpad\\vlm\\img\\S5008_A-101.png"
+  },
+  {
+   "id": "S5008_A-102",
+   "truth": {
+    "doors": 16,
+    "windows": 13
+   },
+   "ours": {
+    "doors": 13,
+    "windows": 14
+   },
+   "png": "C:\\Users\\pw710\\AppData\\Local\\Temp\\claude\\b462510b52b73ca0\\fba98151-c538-41fa-99ad-b3a360dc68c8\\scratchpad\\vlm\\img\\S5008_A-102.png"
+  },
+  {
+   "id": "S5008_A-103",
+   "truth": {
+    "doors": 14,
+    "windows": 16
+   },
+   "ours": {
+    "doors": 11,
+    "windows": 16
+   },
+   "png": "C:\\Users\\pw710\\AppData\\Local\\Temp\\claude\\b462510b52b73ca0\\fba98151-c538-41fa-99ad-b3a360dc68c8\\scratchpad\\vlm\\img\\S5008_A-103.png"
+  },
+  {
+   "id": "S5009_A-101",
+   "truth": {
+    "doors": 15,
+    "windows": 21
+   },
+   "ours": {
+    "doors": 13,
+    "windows": 37
+   },
+   "png": "C:\\Users\\pw710\\AppData\\Local\\Temp\\claude\\b462510b52b73ca0\\fba98151-c538-41fa-99ad-b3a360dc68c8\\scratchpad\\vlm\\img\\S5009_A-101.png"
+  },
+  {
+   "id": "S5009_A-102",
+   "truth": {
+    "doors": 9,
+    "windows": 19
+   },
+   "ours": {
+    "doors": 6,
+    "windows": 31
+   },
+   "png": "C:\\Users\\pw710\\AppData\\Local\\Temp\\claude\\b462510b52b73ca0\\fba98151-c538-41fa-99ad-b3a360dc68c8\\scratchpad\\vlm\\img\\S5009_A-102.png"
+  },
+  {
+   "id": "S5009_A-103",
+   "truth": {
+    "doors": 9,
+    "windows": 19
+   },
+   "ours": {
+    "doors": 6,
+    "windows": 31
+   },
+   "png": "C:\\Users\\pw710\\AppData\\Local\\Temp\\claude\\b462510b52b73ca0\\fba98151-c538-41fa-99ad-b3a360dc68c8\\scratchpad\\vlm\\img\\S5009_A-103.png"
+  }
+ ],
+ "table": {
+  "ours (rules, no LLM)": {
+   "doors": {
+    "exact": 0.05,
+    "mae": 2.7,
+    "mape": 21.6
+   },
+   "windows": {
+    "exact": 0.15,
+    "mae": 14.25,
+    "mape": 48.6
+   }
+  },
+  "gemini:gemini-2.5-flash": {
+   "doors": {
+    "exact": 0.1,
+    "mae": 4.35,
+    "mape": 28.8
+   },
+   "windows": {
+    "exact": 0.0,
+    "mae": 14.9,
+    "mape": 62.1
+   }
+  }
+ }
+}

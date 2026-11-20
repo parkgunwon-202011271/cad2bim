@@ -1,0 +1,66 @@
+{
+ "synthetic": {
+  "rule": {
+   "accuracy": 0.635,
+   "macro_f1": 0.502,
+   "per_class": {
+    "wall": 0.729,
+    "door": 0.438,
+    "window": 0.604,
+    "open": 0.238
+   }
+  },
+  "ml": {
+   "accuracy": 0.971,
+   "macro_f1": 0.94,
+   "per_class": {
+    "wall": 0.972,
+    "door": 0.943,
+    "window": 0.996,
+    "open": 0.85
+   }
+  }
+ },
+ "jumin": {
+  "ours": {
+   "accuracy": 0.708,
+   "macro_f1": 0.728,
+   "per_class": {
+    "wall": 0.667,
+    "door": 0.8,
+    "window": 0.857,
+    "open": 0.588
+   }
+  },
+  "qwen3-vl-8b": {
+   "accuracy": 0.625,
+   "macro_f1": 0.411,
+   "per_class": {
+    "wall": 0.286,
+    "door": 0.545,
+    "window": 0.0,
+    "open": 0.815
+   }
+  },
+  "gemini-3.5-flash-lite": {
+   "accuracy": 0.75,
+   "macro_f1": 0.601,
+   "per_class": {
+    "wall": 0.0,
+    "door": 0.923,
+    "window": 0.571,
+    "open": 0.909
+   }
+  },
+  "gpt-5.5": {
+   "accuracy": 0.917,
+   "macro_f1": 0.915,
+   "per_class": {
+    "wall": 0.75,
+    "door": 1.0,
+    "window": 1.0,
+    "open": 0.909
+   }
+  }
+ }
+}

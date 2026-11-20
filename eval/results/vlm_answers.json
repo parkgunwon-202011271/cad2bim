@@ -1,0 +1,230 @@
+{
+ "gemini:gemini-3.5-flash-lite|S5000_A-101": {
+  "doors": 28,
+  "windows": 30,
+  "seconds": 13.5
+ },
+ "gemini:gemini-3.5-flash-lite|S5000_A-102": {
+  "doors": 14,
+  "windows": 26,
+  "seconds": 9.1
+ },
+ "gemini:gemini-3.5-flash-lite|S5000_A-103": {
+  "doors": 28,
+  "windows": 26,
+  "seconds": 30.8
+ },
+ "gemini:gemini-3.5-flash-lite|S5000_A-104": {
+  "doors": 38,
+  "windows": 82,
+  "seconds": 16.7
+ },
+ "gemini:gemini-3.5-flash-lite|S5001_A-101": {
+  "doors": 14,
+  "windows": 8,
+  "seconds": 15.4
+ },
+ "gemini:gemini-3.5-flash-lite|S5001_A-102": {
+  "doors": 3,
+  "windows": 0,
+  "seconds": 44.8
+ },
+ "gemini:gemini-3.5-flash-lite|S5002_A-101": {
+  "doors": 5,
+  "windows": 11,
+  "seconds": 69.4
+ },
+ "gemini:gemini-3.5-flash-lite|S5002_A-102": {
+  "doors": 9,
+  "windows": 0,
+  "seconds": 33.8
+ },
+ "gemini:gemini-3.5-flash-lite|S5002_A-103": {
+  "doors": 9,
+  "windows": 0,
+  "seconds": 14.2
+ },
+ "gemini:gemini-3.5-flash-lite|S5003_A-101": {
+  "doors": 20,
+  "windows": 26,
+  "seconds": 17.6
+ },
+ "gemini:gemini-3.5-flash-lite|S5003_A-102": {
+  "doors": 28,
+  "windows": 26,
+  "seconds": 10.9
+ },
+ "gemini:gemini-3.5-flash-lite|S5003_A-103": {
+  "doors": 18,
+  "windows": 0,
+  "seconds": 9.1
+ },
+ "gemini:gemini-3.5-flash-lite|S5003_A-104": {
+  "doors": 14,
+  "windows": 26,
+  "seconds": 9.1
+ },
+ "gemini:gemini-3.5-flash-lite|S5004_A-101": {
+  "doors": 14,
+  "windows": 26,
+  "seconds": 4.0
+ },
+ "gemini:gemini-3.5-flash-lite|S5004_A-102": {
+  "doors": 14,
+  "windows": 26,
+  "seconds": 11.2
+ },
+ "gemini:gemini-3.5-flash-lite|S5004_A-103": {
+  "doors": 14,
+  "windows": 21,
+  "seconds": 16.1
+ },
+ "gemini:gemini-3.5-flash-lite|S5005_A-101": {
+  "doors": 20,
+  "windows": 0,
+  "seconds": 4.7
+ },
+ "gemini:gemini-3.5-flash-lite|S5005_A-102": {
+  "doors": 14,
+  "windows": 26,
+  "seconds": 37.9
+ },
+ "gemini:gemini-3.5-flash-lite|S5005_A-103": {
+  "doors": 14,
+  "windows": 26,
+  "seconds": 5.8
+ },
+ "gemini:gemini-3.5-flash-lite|S5006_A-101": {
+  "doors": 18,
+  "windows": 9,
+  "seconds": 18.5
+ },
+ "gemini:gemini-3.5-flash-lite|S5006_A-102": {
+  "doors": 14,
+  "windows": 9,
+  "seconds": 1.9
+ },
+ "gemini:gemini-3.5-flash-lite|S5006_A-103": {
+  "doors": 14,
+  "windows": 21,
+  "seconds": 5.9
+ },
+ "gemini:gemini-3.5-flash-lite|S5007_A-101": {
+  "doors": 14,
+  "windows": 0,
+  "seconds": 4.7
+ },
+ "gemini:gemini-3.5-flash-lite|S5007_A-102": {
+  "doors": 14,
+  "windows": 0,
+  "seconds": 15.0
+ },
+ "gemini:gemini-3.5-flash-lite|S5008_A-101": {
+  "doors": 18,
+  "windows": 9,
+  "seconds": 71.8
+ },
+ "gemini:gemini-3.5-flash-lite|S5008_A-102": {
+  "doors": 14,
+  "windows": 9,
+  "seconds": 4.1
+ },
+ "gemini:gemini-3.5-flash-lite|S5008_A-103": {
+  "doors": 11,
+  "windows": 10,
+  "seconds": 24.4
+ },
+ "gemini:gemini-3.5-flash-lite|S5009_A-101": {
+  "doors": 9,
+  "windows": 3,
+  "seconds": 5.6
+ },
+ "gemini:gemini-3.5-flash-lite|S5009_A-102": {
+  "doors": 9,
+  "windows": 0,
+  "seconds": 21.5
+ },
+ "gemini:gemini-3.5-flash-lite|S5009_A-103": {
+  "doors": 14,
+  "windows": 0,
+  "seconds": 8.4
+ },
+ "gemini:gemini-4-hydrogen|S5000_A-101": {
+  "doors": 13,
+  "windows": 22,
+  "seconds": 246.8
+ },
+ "gemini:gemini-4-hydrogen|S5000_A-102": {
+  "raw": "",
+  "seconds": 587.4
+ },
+ "gemini:gemini-4-hydrogen|S5000_A-103": {
+  "doors": 18,
+  "windows": 16,
+  "seconds": 770.7
+ },
+ "gemini:gemini-4-hydrogen|S5000_A-104": {
+  "doors": 14,
+  "windows": 24,
+  "seconds": 188.4
+ },
+ "gemini:gemini-4-hydrogen|S5001_A-101": {
+  "doors": 5,
+  "windows": 5,
+  "seconds": 148.0
+ },
+ "gemini:gemini-4-hydrogen|S5001_A-102": {
+  "doors": 4,
+  "windows": 0,
+  "seconds": 299.1
+ },
+ "gemini:gemini-4-hydrogen|S5002_A-101": {
+  "error": "LLM 하루 한도가 다 됐습니다(gemini:gemini-4-hydrogen). 남은 지점은 대기 목록에 둡니다.",
+  "seconds": 0.3
+ },
+ "gemini:gemini-4-hydrogen|S5002_A-102": {
+  "error": "LLM 하루 한도가 다 됐습니다(gemini:gemini-4-hydrogen). 남은 지점은 대기 목록에 둡니다.",
+  "seconds": 16.0
+ },
+ "gemini:gemini-4-hydrogen|S5002_A-103": {
+  "error": "LLM 하루 한도가 다 됐습니다(gemini:gemini-4-hydrogen). 남은 지점은 대기 목록에 둡니다.",
+  "seconds": 31.4
+ },
+ "gemini:gemini-4-hydrogen|S5003_A-101": {
+  "error": "LLM 하루 한도가 다 됐습니다(gemini:gemini-4-hydrogen). 남은 지점은 대기 목록에 둡니다.",
+  "seconds": 31.9
+ },
+ "gemini:gemini-4-hydrogen|S5003_A-102": {
+  "error": "LLM 하루 한도가 다 됐습니다(gemini:gemini-4-hydrogen). 남은 지점은 대기 목록에 둡니다.",
+  "seconds": 15.4
+ },
+ "gemini:gemini-4-hydrogen|S5003_A-103": {
+  "error": "LLM 하루 한도가 다 됐습니다(gemini:gemini-4-hydrogen). 남은 지점은 대기 목록에 둡니다.",
+  "seconds": 31.5
+ },
+ "gemini:gemini-4-hydrogen|S5003_A-104": {
+  "doors": 13,
+  "windows": 28,
+  "seconds": 186.2
+ },
+ "gemini:gemini-4-hydrogen|S5004_A-101": {
+  "error": "LLM 하루 한도가 다 됐습니다(gemini:gemini-4-hydrogen). 남은 지점은 대기 목록에 둡니다.",
+  "seconds": 0.3
+ },
+ "gemini:gemini-4-hydrogen|S5004_A-102": {
+  "error": "LLM 하루 한도가 다 됐습니다(gemini:gemini-4-hydrogen). 남은 지점은 대기 목록에 둡니다.",
+  "seconds": 15.9
+ },
+ "gemini:gemini-4-hydrogen|S5004_A-103": {
+  "error": "LLM 하루 한도가 다 됐습니다(gemini:gemini-4-hydrogen). 남은 지점은 대기 목록에 둡니다.",
+  "seconds": 15.7
+ },
+ "gemini:gemini-4-hydrogen|S5005_A-101": {
+  "error": "LLM 하루 한도가 다 됐습니다(gemini:gemini-4-hydrogen). 남은 지점은 대기 목록에 둡니다.",
+  "seconds": 15.8
+ },
+ "gemini:gemini-4-hydrogen|S5005_A-102": {
+  "error": "LLM 하루 한도가 다 됐습니다(gemini:gemini-4-hydrogen). 남은 지점은 대기 목록에 둡니다.",
+  "seconds": 15.8
+ }
+}
