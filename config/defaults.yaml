@@ -25,6 +25,7 @@ regions:
   frame_min_content_share: 0.95
   sheet_size_tolerance: 0.01  # 나란한 도곽끼리 크기 차이
   min_frame_side_mm: 3000.0
+  frame_line_pair_mm: 600.0   # 선으로 그린 도곽 칸: 이 거리 안에 나란한 긴 선이 또 있으면 벽(두 줄)으로 보고 칸으로 치지 않는다
   plan_min_share_of_largest: 0.05
   frame_span_share: 0.9      # 이만큼 도곽을 가로지르는 선은 도곽선이나 표제란 경계다
   frame_band_share: 0.3      # 도곽 가장자리에서 이 비율 안의 선만 경계로 본다
@@ -127,6 +128,7 @@ walls:
   axis_tolerance_mm: 15.0
   max_bridge_mm: 4000.0      # 이보다 넓은 틈은 개구부로 보지 않는다
   min_wall_length_mm: 300.0
+  arc_step_deg: 15.0          # 곡선 벽을 이 각도마다 끊어 짧은 직선 벽으로 만든다. 0이면 곡선 벽을 만들지 않는다(미지원으로 남김)
   junction_tolerance_mm: 50.0
   opening_fill_min_share: 0.5
   single_line_min_mm: 500.0
@@ -154,6 +156,10 @@ openings:
   leaf_line_tolerance_mm: 30.0  # 문짝 선 끝이 경첩·호 끝과 이만큼 안에 있으면 그 호의 문짝이다
   line_min_coverage: 0.8
   window_min_lines: 2
+  # 벽선이 끊기지 않고 벽 두께 안에 창호 선이 나란히 지나가는 구간을 창으로 본다(유리 외벽). 0이면 끈다.
+  window_in_wall_min_mm: 600.0   # 이보다 짧은 구간은 창으로 보지 않는다
+  window_in_wall_gap_mm: 150.0   # 창틀로 끊긴 간격이 이보다 작으면 한 창으로 잇는다
+  window_in_wall_tol_mm: 10.0    # 벽 면에서 이만큼 벗어난 선까지 벽 안의 선으로 본다
   door_gap_reach_mm: 300.0   # 벽 틈 둘레 이 거리 안의 문 레이어 선을 본다
   door_gap_min_share: 0.5    # 문 레이어 선이 틈 폭의 이 비율 이상이면 문(호 없는 미닫이·오버헤드·방열문)
 

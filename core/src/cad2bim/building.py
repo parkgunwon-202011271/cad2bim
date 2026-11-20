@@ -20,7 +20,8 @@ from shapely.ops import unary_union
 
 from .classify import SheetDictionary
 from .classify.floors import (
-    PARTIAL, ROOF, agreed_levels, floor_key, partial_key, plan_level, plan_title_text, read_level_marks, read_level_notes,
+    PARTIAL, ROOF, agreed_levels, floor_key, partial_key, plan_level, plan_title_text, read_ceiling_heights, read_level_marks,
+    read_level_notes,
     roof_key,
 )
 from .config import load_sheet_dictionary
@@ -251,6 +252,25 @@ def _label_shift(a: PlanPart, b: PlanPart) -> tuple[tuple[float, float], float] 
     return (shift[0], shift[1]), min(1.0, agreeing / max(len(a.labels), 1))
 
 
+# 벽 평면이 아닌 평면의 제목. 층 표기가 없어도 이 제목이 붙은 칸은 층 평면 후보에서 뺀다.
+_NON_PLAN_TITLE = re.compile(r"(천장|천정|반자|설비|전기|소방|기계|조명)[가-힣\s]*도\s*$")
+
+
+def _has_title(texts: list[Any], region: Any, pattern: re.Pattern[str]) -> bool:
+    """region 안에 pattern에 맞는 제목 글자가 있는가."""
+    if not region:
+        return False
+    for p in texts:
+        if p.kind != "text":
+            continue
+        x, y = p.geometry["position"]
+        if region[0] <= x <= region[2] and region[1] <= y <= region[3] and any(
+            pattern.search(token.strip()) for token in p.geometry["text"].split("/")
+        ):
+            return True
+    return False
+
+
 def part_title_kind(texts: list[Any], region: Any, dictionary: SheetDictionary) -> str | None:
     """나뉜 평면 하나의 제목 종류. 한 파일에 평면, 단면, 입면을 함께 그린 경우를 가른다."""
     best = None
@@ -300,6 +320,9 @@ def read_parts(folder: Path, cfg: dict[str, Any], levels: dict[str, float] | Non
                         levels.setdefault(key, value)
             if len(directories) > 1 and part_title_kind(model, ir["source"].get("region"), dictionary) in ("vertical", "detail", "site", "table"):
                 stats["not_plan"] += 1
+                continue
+            if len(directories) > 1 and _has_title(model, ir["source"].get("region"), _NON_PLAN_TITLE):
+                stats["not_architectural"] += 1  # 한 장에 평면도와 함께 그린 천장도·설비도 칸
                 continue
             title = plan_title_text(model, ir["source"].get("region"))
             # 파일에 평면이 하나일 때만 파일명의 층을 믿는다.
@@ -1030,6 +1053,14 @@ def run_build(folder: Path, height: float | None = None, jobs: int = 1) -> str:
     align_storeys(storeys)
     trimmed = trim_partial_floors(storeys)
     drawings = _part_drawings(folder, out_dir, storeys)
+    if height_source == "default" and len(storeys) == 1:
+        # 층 레벨이 없는 단층 도면(인테리어 등): 도면에 적힌 천장고 가운데 가장 높은 값을 벽 높이로 쓴다.
+        # 천장도가 같은 장의 다른 칸에 있어도 읽도록 파일 전체의 글자를 본다.
+        drawing = drawings.get(storeys[0].part.part_id)
+        notes_found = read_ceiling_heights(load_primitives(drawing, cfg, out_dir / "_prims")[0]) if drawing else []
+        if notes_found:
+            storeys[0].height = max(notes_found)
+            height_source = "ceiling_note"
     from .review import review
 
     reviewed = review(storeys, drawings, out_dir, cfg)  # LLM 검토. 꺼져 있으면 아무것도 안 한다

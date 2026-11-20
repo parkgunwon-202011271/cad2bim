@@ -71,6 +71,24 @@ def plan_level(texts: list[Any], region: Any = None) -> float | None:
 _LEVEL_NOTE = re.compile(r"(지하|지상|B)?\s*(\d{1,2})\s*층\s*바닥\s*(?:레벨)?\s*(?:EL|FL)\s*\+?\s*(-?\d+(?:\.\d+)?)", re.I)
 
 
+# 천장고 주기 'C.H.: 3,300', 'CH=2700'. 인테리어 도면은 층 레벨 대신 실마다 천장고를 적는다.
+_CEILING_NOTE = re.compile(r"(?<![a-z])c\.?\s*h\.?\s*[:=]?\s*\+?\s*(\d{1,2},?\d{3})(?!\d)", re.I)
+_CEILING_RANGE_MM = (2000.0, 9000.0)
+
+
+def read_ceiling_heights(texts: list[Any]) -> list[float]:
+    """도면에 적힌 천장고(mm) 목록. 사람이 서는 높이 범위 밖의 숫자는 버린다."""
+    found = []
+    for p in texts:
+        if p.kind != "text":
+            continue
+        for match in _CEILING_NOTE.finditer(p.geometry["text"]):
+            value = float(match.group(1).replace(",", ""))
+            if _CEILING_RANGE_MM[0] <= value <= _CEILING_RANGE_MM[1]:
+                found.append(value)
+    return found
+
+
 def read_level_notes(texts: list[Any]) -> dict[str, float]:
     """'3층 바닥 EL+26.50' 같은 주기에서 층 바닥 높이(mm)를 읽는다. 없으면 빈 값이다."""
     levels: dict[str, float] = {}

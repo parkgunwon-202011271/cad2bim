@@ -83,3 +83,14 @@ def test_rail_is_written_at_rail_height(tmp_path):
 def test_layer_roles(layer, role):
     prims = [Primitive("L", "line", {"p1": (0, 0), "p2": (1000, 0)}, layer, ("1",))]
     assert DictionaryClassifier(load_layer_dictionary()).classify(prims).role(layer) == role
+
+
+def test_ceiling_height_notes_are_read_within_a_sane_range():
+    from cad2bim.classify.floors import read_ceiling_heights
+    from cad2bim.preprocess.primitive import Primitive
+
+    def note(text):
+        return Primitive("T", "text", {"position": (0, 0), "text": text, "height": 100, "rotation": 0}, "text", ("1",))
+
+    texts = [note("C.H.: 3,300"), note("CH=2700"), note("HALL / C.H : +2400"), note("C.H.: 300"), note("EACH: 3,300"), note("F.L: +0")]
+    assert read_ceiling_heights(texts) == [3300.0, 2700.0, 2400.0]

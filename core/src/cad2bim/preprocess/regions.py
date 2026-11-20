@@ -199,6 +199,85 @@ def _sheet_row(
     return result
 
 
+def _long_axis_lines(prims: list[Primitive], min_length: float) -> tuple[dict[int, list], dict[int, list]]:
+    """축에 나란한 긴 선분. (세로선: x → [(y0, y1, 요소)], 가로선: y → [(x0, x1, 요소)]). 좌표는 mm로 반올림한다."""
+    vertical: dict[int, list] = {}
+    horizontal: dict[int, list] = {}
+    for p in prims:
+        if p.kind != "line" or p.block_path:
+            continue
+        for a, b in _edges(p):
+            if abs(a[0] - b[0]) <= _EDGE_TOL and abs(a[1] - b[1]) >= min_length:
+                vertical.setdefault(round((a[0] + b[0]) / 2), []).append((min(a[1], b[1]), max(a[1], b[1]), p))
+            elif abs(a[1] - b[1]) <= _EDGE_TOL and abs(a[0] - b[0]) >= min_length:
+                horizontal.setdefault(round((a[1] + b[1]) / 2), []).append((min(a[0], b[0]), max(a[0], b[0]), p))
+    return vertical, horizontal
+
+
+def _covers(spans: list, low: float, high: float) -> bool:
+    """이어 붙인 선분들이 [low, high]를 빈틈없이 덮는가."""
+    reach = low
+    for start, end, _ in sorted(spans, key=lambda s: s[0]):
+        if start > reach + _EDGE_TOL:
+            break
+        reach = max(reach, end)
+        if reach >= high - _EDGE_TOL:
+            return True
+    return False
+
+
+def line_cells(prims: list[Primitive], cfg: dict[str, Any]) -> tuple[list[BBox], set[int]]:
+    """선으로 그린 도곽 칸. 한 장에 평면도·천장도·입면도를 칸으로 나눠 그린 도면을 가른다. (칸 범위, 도곽선 요소 id)
+
+    닫힌 사각형이 아니라 LINE으로 그린 표는 strip_frames의 사각형 검사에 걸리지 않는다.
+    벽으로 둘러싼 방을 칸으로 잘못 보지 않게 조건을 좁힌다:
+    - 같은 크기의 칸이 둘 이상 나란히 붙어 있고(같은 높이, 옆 칸과 세로선을 함께 씀),
+    - 칸을 이루는 선 곁에 나란한 짝이 없으며(벽은 두 줄로 그린다),
+    - 칸들이 도면 내용 대부분을 담는다.
+    """
+    min_side = cfg["min_frame_side_mm"]
+    vertical, horizontal = _long_axis_lines(prims, min_side)
+    if len(vertical) < 3 or len(horizontal) < 2:
+        return [], set()
+    pair = cfg.get("frame_line_pair_mm", 600.0)
+
+    def lonely(lines: dict[int, list], at: int) -> bool:
+        return not any(other != at and abs(other - at) <= pair for other in lines)
+
+    tolerance = cfg["sheet_size_tolerance"]
+    best: tuple[list[BBox], set[int]] = ([], set())
+    rows = sorted(horizontal)
+    for i, bottom in enumerate(rows):
+        for top in rows[i + 1:]:
+            if top - bottom < min_side or not (lonely(horizontal, bottom) and lonely(horizontal, top)):
+                continue
+            posts = [x for x in sorted(vertical) if _covers(vertical[x], bottom, top) and lonely(vertical, x)]
+            cells = [
+                (float(left), float(bottom), float(right), float(top)) for left, right in zip(posts, posts[1:])
+                if right - left >= min_side and _covers(horizontal[bottom], left, right) and _covers(horizontal[top], left, right)
+            ]
+            # 나란히 이어진 같은 폭의 칸만 남긴다.
+            run: list[BBox] = []
+            for cell in cells:
+                same = run and abs(cell[0] - run[-1][2]) <= _EDGE_TOL and abs((cell[2] - cell[0]) / (run[0][2] - run[0][0]) - 1) <= tolerance
+                run = [*run, cell] if same or not run else [cell]
+                if len(run) >= 2 and len(run) > len(best[0]):
+                    used = {
+                        id(p) for x in {c[0] for c in run} | {run[-1][2]} for _, _, p in vertical[round(x)]
+                    } | {id(p) for y in (bottom, top) for _, _, p in horizontal[y]}
+                    best = (list(run), used)
+    cells, used = best
+    if not cells:
+        return [], set()
+    drawn = _Drawn([p for p in prims if id(p) not in used])
+    inside = [drawn.inside(c) for c in cells]
+    if not drawn.items or any(m.size == 0 for m in inside):
+        return [], set()
+    if np.unique(np.concatenate(inside)).size < cfg["frame_min_content_share"] * len(drawn.items):
+        return [], set()
+    return cells, used
+
+
 def strip_frames(
     prims: list[Primitive], cfg: dict[str, Any]
 ) -> tuple[list[Primitive], list[Primitive], list[BBox]]:
@@ -242,9 +321,14 @@ def strip_frames(
             removed.update(id(drawn.items[int(i)][0]) for i in drawn.inside(tb))
         removed.update(_sheet_furniture(rect, r, drawn, cfg))
 
+    boxes = [f[1] for f in frames]
+    if not boxes:  # 사각형 도곽이 없을 때만 선으로 그린 칸을 찾는다
+        cells, lines = line_cells(prims, cfg)
+        boxes = cells
+        removed |= lines
     kept = [p for p in prims if id(p) not in removed]
     excluded = [p for p in prims if id(p) in removed]
-    return kept, excluded, [f[1] for f in frames]
+    return kept, excluded, boxes
 
 
 def _cluster(drawn: list[Primitive], gap: float, frames: list[BBox]) -> list[list[Primitive]]:
@@ -294,13 +378,34 @@ def _is_plan(group: list[Primitive], cfg: dict[str, Any]) -> bool:
     return diagonal >= cfg["min_plan_diagonal_mm"]
 
 
+_CELL_INSET = 10.0  # 칸 경계에 걸친 옆 칸 요소가 딸려 오지 않게 안쪽으로 들인다
+
+
 def select_plan(
     prims: list[Primitive],
     cfg: dict[str, Any],
     frames: list[BBox],
     region: BBox | None = None,
+    cells: list[BBox] | None = None,
 ) -> tuple[list[Primitive], list[Primitive]]:
-    """(평면 요소, 평면 밖 요소)를 돌려준다. region은 mm 단위다."""
+    """(평면 요소, 평면 밖 요소)를 돌려준다. region은 mm 단위다.
+
+    cells: 선으로 그린 도곽 칸(line_cells). 칸마다 도면 하나(평면도, 천장도, 입면도 …)이므로 칸을 통째로 후보로 낸다.
+    제목과 주기가 그림에서 떨어져 있어도 같은 칸이면 함께 간다. 어느 칸이 평면도인지는 제목으로 가른다(building.read_parts).
+    """
+    if region is None and cells and len(cells) > 1:
+        drawn = _Drawn(prims)
+        filled = [
+            (c[0] + _CELL_INSET, c[1] + _CELL_INSET, c[2] - _CELL_INSET, c[3] - _CELL_INSET) for c in cells
+            if _drawn_lines([drawn.items[int(i)][0] for i in drawn.inside(c)]) >= cfg["min_plan_primitives"]
+        ]
+        if len(filled) > 1:
+            listing = ", ".join(",".join(f"{v:.0f}" for v in c) for c in filled)
+            raise RegionAmbiguousError(
+                f"도곽 칸이 {len(filled)}개입니다. --region으로 하나를 지정하세요. 후보(mm, x1,y1,x2,y2): {listing}", filled,
+            )
+        if filled:
+            region = filled[0]
     if region is not None:
         kept, outside = [], []
         for p in prims:

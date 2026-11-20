@@ -14,7 +14,7 @@ from ..timing import stage
 from .explode import ExplodeStats, extract_primitives
 from .normalize import NormalizeStats, normalize
 from .primitive import BBox, Primitive, union_bbox
-from .regions import select_plan, strip_frames
+from .regions import line_cells, select_plan, strip_frames
 from .units import ScaleDecision, decide_scale
 
 
@@ -98,7 +98,9 @@ def preprocess(
         kept, frame_parts, frames = strip_frames(in_mm, cfg["regions"])
     with stage("plan"):
         try:
-            plan, outside = select_plan(kept, cfg["regions"], frames, region_mm)
+            # 선으로 그린 칸이 도곽으로 잡혔으면(사각형 도곽이 없을 때) 칸마다 도면 하나로 본다.
+            cells = frames if frames and line_cells(in_mm, cfg["regions"])[0] == frames else None
+            plan, outside = select_plan(kept, cfg["regions"], frames, region_mm, cells)
         except RegionAmbiguousError as exc:
             exc.scale_factor = scale.factor
             raise

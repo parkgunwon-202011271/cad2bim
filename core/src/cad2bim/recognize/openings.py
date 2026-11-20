@@ -360,4 +360,64 @@ def recognize_openings(
                 handles=handles, role_known=known,
                 reasons=["unknown_opening"] if kind == "unknown" else [],
             ))
+    if cfg.get("window_in_wall_min_mm", 0.0) > 0:
+        others += _windows_in_walls(walls, lines, line_tree, layers, doors + others, cfg)
     return doors + others
+
+
+def _windows_in_walls(
+    walls: list[WallDraft], lines: list[tuple[np.ndarray, np.ndarray, str, tuple[str, ...]]], line_tree: Any,
+    layers: LayerMap, taken: list[OpeningDraft], cfg: dict[str, Any],
+) -> list[OpeningDraft]:
+    """벽선이 끊기지 않았는데 벽 두께 안에 창호 선이 나란히 지나가는 구간을 창으로 본다.
+
+    유리 외벽을 '벽 두 줄 + 그 사이 유리선'으로 그리는 도면이 있다. 벽이 끊긴 틈만 창으로 보면 이런 창을 모두 놓친다.
+    창호 레이어 선이 window_min_lines줄 이상 겹쳐 지나가는 구간만 받는다(문틀 선 한 줄은 창이 아니다).
+    """
+    found: list[OpeningDraft] = []
+    for index, wall in enumerate(walls):
+        if wall.single_line or wall.from_door or wall.glazed or wall.length <= 0:
+            continue
+        u = wall.direction
+        n = np.array([-u[1], u[0]])
+        half = wall.thickness / 2 + cfg["window_in_wall_tol_mm"]
+        band = shapely.LineString([wall.start, wall.end]).buffer(half, cap_style="flat")
+        events: list[tuple[float, int]] = []
+        handles: list[str] = []
+        for j in line_tree.query(band).tolist():
+            a, b, layer, source = lines[j]
+            if layers.role(layer) != "WINDOW":
+                continue
+            if abs(float((a - wall.start) @ n)) > half or abs(float((b - wall.start) @ n)) > half:
+                continue  # 벽과 나란하지 않거나 벽 밖의 선
+            lo, hi = sorted((float((a - wall.start) @ u), float((b - wall.start) @ u)))
+            lo, hi = max(lo, 0.0), min(hi, wall.length)
+            if hi - lo < 1.0:
+                continue
+            events += [(lo, 1), (hi, -1)]
+            handles.extend(source)
+        if not events:
+            continue
+        spans: list[list[float]] = []
+        depth, start = 0, 0.0
+        for at, change in sorted(events, key=lambda e: (e[0], -e[1])):
+            before = depth
+            depth += change
+            if before < cfg["window_min_lines"] <= depth:
+                start = at
+            elif depth < cfg["window_min_lines"] <= before and at - start > 1.0:
+                if spans and start - spans[-1][1] <= cfg["window_in_wall_gap_mm"]:
+                    spans[-1][1] = at  # 창틀로 잠깐 끊긴 곳은 한 창이다
+                else:
+                    spans.append([start, at])
+        used = [d for d in taken if d.wall == index]
+        for lo, hi in spans:
+            center, width = (lo + hi) / 2, hi - lo
+            if width < cfg["window_in_wall_min_mm"]:
+                continue
+            if any(abs(d.position - center) < (d.width + width) / 2 for d in used):
+                continue  # 이미 그 자리에 문이나 창이 있다
+            found.append(OpeningDraft(
+                "window", index, center, width, "fixed", handles=sorted(set(handles)), role_known=True, reasons=["window_in_wall"],
+            ))
+    return found
