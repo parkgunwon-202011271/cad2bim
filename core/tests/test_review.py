@@ -52,6 +52,24 @@ def test_off_does_nothing_and_cache_leaves_a_pending_list(tmp_path, monkeypatch)
     assert s2.part.ir["openings"][0]["type"] == "window"
 
 
+def test_item_list_for_the_app_keeps_decided_spots_and_gets_building_coordinates(tmp_path, monkeypatch):
+    monkeypatch.setenv("CAD2BIM_LLM", "cache")
+    monkeypatch.setattr(review, "render_spots", lambda *a, **k: {})
+    s = storey([gap("U1", 2000.0), gap("U2", 5000.0)])
+    s.shift, s.elevation = (300.0, -50.0), 4500.0
+    key = review.find_spots([s])[0].key
+    review.save_decisions(tmp_path / "_llm", {key: {"answer": "door", "reason": "문 호", "model": "openai:test"}})
+    review.review([s], {}, tmp_path, {})
+    assert review.locate_items([s], tmp_path, (1000.0, 0.0)) == 2
+    data = json.loads((tmp_path / "_llm" / review.ITEMS).read_text(encoding="utf-8"))
+    decided, waiting = data["items"]  # 답이 있는 곳도 목록에 남는다(대기 목록에는 없다)
+    assert decided["decision"]["answer"] == "door" and waiting["decision"] is None
+    assert decided["kind"] == "opening" and decided["floor"] == "F2" and decided["width"] == 1200
+    ox, oy = s.part.ir["origin_offset"]
+    assert decided["position"] == [2000.0 + ox + 300.0 - 1000.0, 0.0 + oy - 50.0, 4500.0]  # 도면 좌표 + 원점 + 층 이동 - 공통 원점
+    assert data["answers"] == list(review.ANSWERS)
+
+
 def test_outline_without_a_wall_becomes_a_spot_and_a_wall_answer_closes_it():
     ir = plan_ir()
     ir["source"] = {"sha256": "abcdef0123456789zz", "unit_scale": 1.0}
@@ -217,3 +235,37 @@ def test_answers_received_now_are_applied_in_the_same_build(tmp_path, monkeypatc
     monkeypatch.setattr(review, "ask_llm", lambda spots, *a, **k: {sp.key: {"answer": "door", "reason": "문"} for sp in spots})
     line = review.review([s], {}, tmp_path, {})
     assert "pending=0" in line and s.part.ir["openings"][0]["type"] == "door"
+
+
+def test_an_answer_that_contradicts_the_drawing_is_kept_aside_with_the_reason(tmp_path, monkeypatch):
+    """LLM의 답이 도면 근거와 어긋나면 적용하지 않는다. 무엇을 왜 걸렀는지는 남겨 화면에서 보여 준다."""
+    s = storey([gap("U1", 2000.0), gap("U2", 5000.0)])
+    first, second = review.find_spots([s])
+    image = tmp_path / "spot.png"
+    image.write_bytes(b"png")
+    evidence = {first.key: {"text": "", "counts": {"DOOR": 1, "ARC": 2}}, second.key: {"text": "", "counts": {"WALL": 2}}}
+    monkeypatch.setattr(review, "ask", lambda *a, **k: '{"answer": "open", "reason": "열린 공간"}')
+    directory = tmp_path / "_llm"
+    answers = review.ask_llm([first, second], {first.key: image, second.key: image}, "gemini", "m", directory, evidence)
+    assert list(answers) == [second.key]  # 문 표시가 없는 자리의 '열린 통로'는 받아들인다
+    kept = review.load_rejected(directory)[first.key]
+    assert kept["answer"] == "open" and kept["model"] == "gemini:m" and "문선 1개" in kept["why"] and "원호 2개" in kept["why"]
+    assert review.conflict("door", {"DOOR": 1}) is None and review.consistent("door", {"DOOR": 1})
+    assert "창선 4개" in review.conflict("wall", {"WINDOW": 4, "WALL": 2}, "window")
+    assert "기둥" in review.conflict("door", {"COLUMN": 1}, "corner") and review.conflict("door", {"COLUMN": 1}) is None
+    assert "아무 선도 없는데" in review.conflict("window", {"GRID": 1})
+    # 다음에 받아들일 답이 오면 걸러진 기록은 지운다
+    monkeypatch.setattr(review, "ask", lambda *a, **k: '{"answer": "door", "reason": "문 호"}')
+    review.ask_llm([first], {first.key: image}, "gemini", "m", directory, evidence)
+    assert first.key not in review.load_rejected(directory)
+
+
+def test_item_list_carries_the_rejected_answer_until_an_ai_answer_is_applied(tmp_path, monkeypatch):
+    monkeypatch.setenv("CAD2BIM_LLM", "cache")
+    monkeypatch.setattr(review, "render_spots", lambda *a, **k: {})
+    s = storey([gap("U1", 2000.0)])
+    key = review.find_spots([s])[0].key
+    review.save_rejected(tmp_path / "_llm", {key: {"answer": "open", "reason": "r", "model": "gemini:m", "why": "문선이 있습니다."}})
+    review.review([s], {}, tmp_path, {})
+    item = json.loads((tmp_path / "_llm" / review.ITEMS).read_text(encoding="utf-8"))["items"][0]
+    assert item["decision"] is None and item["rejected"]["answer"] == "open" and item["rejected"]["why"] == "문선이 있습니다."

@@ -82,6 +82,12 @@
     assert(Number(separator.getAttribute('aria-valuenow')) === 50, '더블클릭으로 반반 배치를 복원해야 합니다');
     const help = doc.querySelector('.c-input-help');
     assert(help?.querySelectorAll('svg').length === 3 && help.querySelector('kbd'), '마우스 그림과 키캡을 안내해야 합니다');
+    const full = doc.querySelector('.c-viewer__action');
+    assert(full && !full.hidden && doc.querySelector('.c-viewer-frame').contains(help), '전체화면 버튼과 조작 안내는 3D 뷰어 안에 있어야 합니다');
+    full.click();
+    assert(views[0].classList.contains('l-stage__view--full') && full.getAttribute('aria-pressed') === 'true', '전체화면으로 전환해야 합니다');
+    doc.body.dispatchEvent(new KeyboardEvent('keydown', { code: 'Escape', bubbles: true }));
+    assert(!views[0].classList.contains('l-stage__view--full') && full.getAttribute('aria-pressed') === 'false', 'Esc로 전체화면을 끝내야 합니다');
     help.querySelector('summary').click();
     assert(!help.open, '조작 안내를 접을 수 있어야 합니다');
     const person = [...doc.querySelectorAll('button')].find((el) => el.textContent === '사람 시점');
@@ -91,6 +97,14 @@
     person.click();
     assert(person.getAttribute('aria-pressed') === 'false' && caption.textContent.includes('단면'), '사람 시점 종료 후 단면 상태로 복귀해야 합니다');
     assert(!help.open, '모드를 바꿔도 접어 둔 안내를 유지해야 합니다');
+    const map = doc.querySelector('.c-minimap');
+    person.click();
+    assert(map && map.hidden, '미니맵은 전체화면이 아니면 숨겨야 합니다');
+    full.click();
+    assert(!map.hidden && map.querySelector('canvas').width > 100 && /층/.test(map.textContent), '전체화면 사람 시점에서는 서 있는 층의 미니맵을 보여야 합니다');
+    person.click();
+    assert(map.hidden, '사람 시점을 끝내면 미니맵을 숨겨야 합니다');
+    full.click();
     person.click();
     [...doc.querySelectorAll('button')].find((el) => el.textContent === '샘플 보기').click();
     await new Promise((resolve, reject) => {
@@ -129,9 +143,60 @@
     frame.style.width = '1100px';
     await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
     assert(frame.contentWindow.getComputedStyle(doc.querySelector('.l-stage__body')).flexDirection === 'row', '넓은 화면에서 좌우 분할로 복원해야 합니다');
+    rail[3].click();
+    const rows = doc.querySelectorAll('.c-review__row');
+    assert(!doc.querySelector('#sidebar-review').hidden && rows.length > 0 && doc.querySelector('.c-rail__badge').textContent === String(rows.length), '검토 메뉴에 검토 지점 목록과 개수를 보여야 합니다');
+    rows[0].click();
+    const card = doc.querySelector('.c-review-card');
+    assert(!card.hidden && card.querySelector('img') && rows[0].getAttribute('aria-pressed') === 'true' && caption.textContent.includes('단면'), '지점을 누르면 도면 조각이 든 상세 카드와 그 층 단면을 보여야 합니다');
+    // AI가 답했지만 도면 근거와 어긋나 걸러진 지점: 답과 걸러진 이유를 보여 준다.
+    const filteredRow = [...rows].find((row) => row.querySelector('.c-review__chip--rejected'));
+    if (filteredRow) {
+      filteredRow.click();
+      const note = card.querySelector('.c-review-card__rejected');
+      assert(note?.textContent.includes('AI의 답') && note.textContent.includes('걸러진 이유') && card.textContent.includes('AI 답 걸러짐'), '걸러진 AI 답과 걸러진 이유를 보여야 합니다');
+    }
+    // 사람의 확인·수정: AI 답이 있는 지점을 골라 확인하고, 다른 답으로 고치고, 적용하고, 되돌린다.
+    const aiRow = [...rows].find((row) => row.querySelector('.c-review__chip--ai'));
+    if (aiRow) {
+      const order = [...rows].indexOf(aiRow);
+      const row = () => doc.querySelectorAll('.c-review__row')[order];
+      const settle = () => new Promise((resolve) => setTimeout(resolve, 50));
+      aiRow.click();
+      const aiAnswer = row().querySelector('.c-review__chip').textContent;
+      [...card.querySelectorAll('.c-review-card__decide button')].find((el) => el.textContent.startsWith('AI 답 확인')).click();
+      await settle();
+      assert(row().querySelector('.c-review__chip--user') && !doc.querySelector('.c-review__apply'), 'AI 답을 확인하면 사람 확인이 되고, 답이 같으니 다시 만들 것은 없어야 합니다');
+      [...card.querySelectorAll('.c-review-card__answer')].find((el) => el.textContent !== aiAnswer).click();
+      await settle();
+      assert(doc.querySelector('.c-review__apply')?.textContent.includes('1건') && row().classList.contains('c-review__row--dirty') && card.textContent.includes('사람이 고쳤습니다'), '답을 고치면 AI 답과 함께 보여 주고 반영 안 된 변경으로 세어야 합니다');
+      card.querySelector('.c-review-card__undo').click();
+      await settle();
+      assert(row().querySelector('.c-review__chip--ai') && !doc.querySelector('.c-review__apply'), '되돌리면 AI 답으로 돌아와야 합니다');
+      [...card.querySelectorAll('.c-review-card__answer')].find((el) => el.textContent !== aiAnswer).click();
+      await settle();
+      doc.querySelector('.c-review__apply button').click();
+      await new Promise((resolve, reject) => {
+        const done = () => doc.querySelector('.c-progress__text--done') && !doc.querySelector('.c-review__apply') && doc.querySelector('.c-review__row');
+        const timer = setTimeout(() => { observer.disconnect(); reject(new Error('변경 적용 시간 초과')); }, 15000);
+        const observer = new MutationObserver(() => { if (done()) { clearTimeout(timer); observer.disconnect(); resolve(); } });
+        observer.observe(doc.body, { subtree: true, childList: true, attributes: true, characterData: true });
+      });
+      assert(row().querySelector('.c-review__chip--user') && !row().classList.contains('c-review__row--dirty'), '변경 적용 뒤에는 고친 답이 반영된 것으로 보여야 합니다');
+      row().click();
+      card.querySelector('.c-review-card__undo').click();
+      await settle();
+    }
+    card.querySelector('.c-review-card__close').click();
+    assert(card.hidden && doc.querySelectorAll('.c-review__row')[0].getAttribute('aria-pressed') === 'false', '상세 카드를 닫을 수 있어야 합니다');
+    [...doc.querySelectorAll('button')].find((el) => el.textContent === '도면 초기화').click();
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    assert(caption.textContent.includes('모델 없음') && full.hidden && help.hidden, '도면 초기화 후 3D 영역이 처음 상태여야 합니다');
+    assert(!doc.querySelector('.c-drawing-list__item') && !doc.querySelector('.c-plan-viewer__chip') && !doc.querySelector('.c-floor-tree') && !doc.querySelector('.c-review__row') && doc.querySelector('.c-rail__badge').hidden, '도면 초기화 후 도면·층·검토 목록이 비어야 합니다');
+    assert(!views[0].hidden && views[1].hidden && !doc.querySelector('.c-viewer__empty').hidden, '도면 초기화 후 3D 탭의 안내 문구로 돌아와야 합니다');
     floor.geometry.dispose();
     floor.material.dispose();
-    result.textContent = 'PASS: modes, sidebar, captions, split resize, input help, person mode, sample load, camera fit';
+    result.textContent = 'PASS: modes, sidebar, captions, split resize, fullscreen, input help, person mode, minimap, sample load, camera fit, review panel, human review, reset';
   } catch (error) {
     result.textContent = `FAIL: ${error.message}`;
     throw error;

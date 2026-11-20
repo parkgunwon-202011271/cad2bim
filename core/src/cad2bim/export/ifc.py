@@ -17,6 +17,7 @@ import ifcopenshell.guid
 import ifcopenshell.util.shape
 import ifcopenshell.validate
 
+from .room_areas import room_areas
 from .floor import door_top, floor_outlines, glazing_band, plan_floors, wall_height, wall_top  # noqa: F401  floor_outlines는 테스트와 다른 모듈이 쓴다
 
 _VOLUME_TOLERANCE = 0.01
@@ -263,6 +264,7 @@ def write_ifc(storeys: list[Any], path: Path, cfg: dict[str, Any]) -> dict[str, 
             counts["stairs"] += 1
 
         spaces = []
+        areas = room_areas(ir)
         for room in ir["rooms"]:
             points = [(float(x + dx), float(y + dy)) for x, y in room["polygon"]]
             if points[0] != points[-1]:
@@ -275,6 +277,15 @@ def write_ifc(storeys: list[Any], path: Path, cfg: dict[str, Any]) -> dict[str, 
             space.ObjectPlacement = writer.placement(0.0, 0.0, 0.0, 0.0, anchor)
             curve = m.createIfcPolyline([m.createIfcCartesianPoint(p) for p in points])
             writer.shape(space, writer.solid(m.createIfcArbitraryClosedProfileDef("AREA", None, curve), s.height))
+            area = areas.get(room["id"])
+            if area is not None:
+                # 안목 면적은 표준 수량으로, 벽 중심선 기준 면적은 표준에 없어 따로 적는다(도면의 면적 표기와 견주는 값).
+                qto = ifcopenshell.api.run("pset.add_qto", m, product=space, name="Qto_SpaceBaseQuantities")
+                ifcopenshell.api.run("pset.edit_qto", m, qto=qto, properties={"NetFloorArea": area["clear"]})
+                pset = ifcopenshell.api.run("pset.add_pset", m, product=space, name="Cad2Bim_SpaceAreas")
+                ifcopenshell.api.run("pset.edit_pset", m, pset=pset, properties={
+                    "CenterlineFloorArea": m.create_entity("IfcAreaMeasure", area["centerline"]),
+                })
             spaces.append(space)
             counts["spaces"] += 1
         if spaces:

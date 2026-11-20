@@ -108,6 +108,7 @@ def test_gemini_is_a_provider_and_needs_a_key(monkeypatch):
         llm_client.ask("gemini", "m", "q")
     with pytest.raises(Cad2BimError):
         llm_client.ask("nobody", "m", "q")
+    monkeypatch.delenv("GEMINI_MODEL", raising=False)  # 개발 PC의 .env에 모델이 적혀 있어도 설정값을 확인한다
     assert llm_client.default_model({"llm": {"models": {"gemini": "g"}}}, "gemini") == "g"
     assert llm_client.extract_json('설명 ```json\n{"answer": "wall"}\n```') == {"answer": "wall"}
 

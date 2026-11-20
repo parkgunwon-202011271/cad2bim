@@ -84,6 +84,30 @@ class JobHandoffTests(unittest.TestCase):
         self.assertEqual(summary['totals']['windows'], '4')
         self.assertEqual(jobs.parse_summary(''), {'floors': [], 'totals': {}})
 
+    def test_review_decisions_overlay_and_keep_the_ai_answer(self):
+        import json
+        out = self.root / jobs.OUT_DIR_NAME
+        (out / '_llm').mkdir(parents=True)
+        ai = {'answer': 'door', 'reason': 'arc', 'model': 'gemini:test'}
+        (out / '_llm' / 'review.json').write_text(json.dumps({'answers': ['wall', 'door', 'open'], 'items': [
+            {'key': 'k1', 'image': None, 'decision': ai}, {'key': 'k2', 'image': None, 'decision': None},
+        ]}), encoding='utf-8')
+        (out / '_llm' / 'decisions.json').write_text(json.dumps({'decisions': {'k1': ai}}), encoding='utf-8')
+        first = jobs.load_review(out)['items']
+        self.assertEqual([(i['applied'], (i['decision'] or {}).get('answer')) for i in first], [('door', 'door'), (None, None)])
+        changed = jobs.set_review_decision(out, 'k1', 'wall')
+        self.assertEqual((changed['answer'], changed['model'], changed['ai']['answer']), ('wall', 'user', 'door'))
+        jobs.set_review_decision(out, 'k1', 'open')  # changing again keeps the original AI answer
+        k1, k2 = jobs.load_review(out)['items']
+        self.assertEqual((k1['applied'], k1['decision']['answer'], k1['decision']['ai']['answer']), ('door', 'open', 'door'))
+        self.assertEqual(jobs.set_review_decision(out, 'k2', 'door')['model'], 'user')
+        self.assertEqual(jobs.set_review_decision(out, 'k1', None), ai)  # undo restores the AI answer
+        self.assertIsNone(jobs.set_review_decision(out, 'k2', None))  # undo with no AI answer goes back to pending
+        self.assertEqual(json.loads((out / '_llm' / 'decisions.json').read_text(encoding='utf-8')), {'decisions': {'k1': ai}})
+        for bad in (('missing', 'wall'), ('k1', 'banana')):
+            with self.assertRaises(ValueError):
+                jobs.set_review_decision(out, *bad)
+
 
 if __name__ == '__main__':
     unittest.main()

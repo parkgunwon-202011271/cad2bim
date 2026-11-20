@@ -3,7 +3,7 @@
 // 키보드: W·S 앞뒤, A·D 옆, Q·E 아래·위, Shift 빠르게. 보는 중심도 함께 움직인다.
 // 바닥 가까이(3m 안)에서는 화각을 70°로 넓힌다. 밖에서는 40°다.
 // 사람 시점(enterPerson): 눈높이 1.6m로 서서 걷는다. 드래그는 고개 돌리기, 벽은 막고 계단은 오른다.
-// 가구: 도면의 가구·위생기구 선을 층 바닥에 그린다(furniture.json).
+// 가구: 도면의 가구·위생기구를 종류별 입체로 세우고(의자 다리·등받이, 탁자 상판 …), 입체로 만들지 못한 선은 층 바닥에 그린다(furniture.json).
 //
 // 표시 스타일
 // - 건축(기본): Revit의 '음영 + 모서리'처럼 차분한 재료색에 모서리 선을 긋는다.
@@ -96,8 +96,21 @@ const FURNITURE_SOLIDS = {
   chair: '#6b7685', table: '#c9ab85', shelf: '#b49b7c', counter: '#e6e2da', fixture: '#f4f4f1', partition: '#d4d1ca',
   appliance: '#8b939d', // 정수기·키오스크·자판기처럼 이름표로 찾은 기기
 };
-// 사람 시점에서 막는 가구. 의자·탁자는 사이로 지나다닐 수 있게 막지 않는다.
-const FURNITURE_BLOCKING = new Set(['shelf', 'counter', 'fixture', 'partition', 'appliance']);
+// 가구 부재의 재질(furniture.json 입체의 m). 재질이 없는 예전 결과는 위의 종류별 색을 쓴다.
+const FURNITURE_MATERIALS = {
+  wood: { color: '#c9ab85', roughness: 0.7 },
+  wood_dark: { color: '#8a6a4b', roughness: 0.7 },
+  metal: { color: '#4a4f57', roughness: 0.45, metalness: 0.6 },
+  steel: { color: '#c3c8cd', roughness: 0.35, metalness: 0.5 },
+  fabric: { color: '#6b7685', roughness: 0.95 },
+  ceramic: { color: '#f4f4f1', roughness: 0.25 },
+  glass: { color: '#bfe3ee', roughness: 0.1, opacity: 0.35 },
+  panel: { color: '#d4d1ca', roughness: 0.85 },
+  top: { color: '#e6e2da', roughness: 0.6 },
+  black: { color: '#2b2d31', roughness: 0.5 },
+};
+// 사람 시점에서 막지 않는 가구. 의자·탁자는 사이로 지나다닐 수 있게 둔다. 나머지는 막는다.
+const FURNITURE_PASSABLE = new Set(['chair', 'table', 'stool']);
 // 엘리베이터(mm). 카 크기는 도면의 승강로 표시를 따르고 높이·문은 흔한 값이다.
 const ELEVATOR_COLOR = '#b8bdc3';
 const ELEVATOR_CAR_MM = 2300; // 카 안 높이
@@ -110,6 +123,13 @@ const ELEVATOR_SPEED_MM = 1200; // mm/s
 const ELEVATOR_DOOR_SPEED = 1.2; // 1/s. 다 열리는 데 약 0.8초
 const ELEVATOR_CALL_MM = 1500; // 문 앞 이 거리 안에 서면 카를 부른다
 const CAP_COLOR = '#4b4f56'; // 잘린 면(포셰)
+// 미니맵. 발밑 높이보다 이만큼 위에 있는 층 바닥까지는 그 층으로 본다(계단을 거의 다 오르면 윗층 평면으로 바뀐다).
+const FLOOR_SWITCH = 1.0; // m
+// 검토 지점 표시. 단면(1.25m)보다 높게 세워 잘린 벽 위로 솟아 보이게 한다.
+const SPOT_COLOR = '#e53935';
+const SPOT_HEIGHT = 2.6; // m
+const SPOT_MARGIN = 0.25; // m. 지점 둘레로 더 두르는 여유
+const SPOT_VIEW_M = 11; // m. 지점을 볼 거리
 
 export function floorLabel(key) {
   const m = FLOOR.exec(key);
@@ -188,6 +208,8 @@ export class Viewer3D {
     this.person = null;
     this.look = null;
     this.onPersonChange = null;
+    this.onFrame = null; // 한 장면을 그린 뒤 부른다(미니맵 갱신)
+    this.spot = null; // 검토 지점 표시
 
     const canvas = this.renderer.domElement;
     canvas.addEventListener('pointerdown', (e) => this.onLook(e, 'down'));
@@ -463,6 +485,7 @@ export class Viewer3D {
       this.camera.updateProjectionMatrix();
     }
     this.renderer.render(this.scene, this.camera);
+    this.onFrame?.();
   }
 
   resize() {
@@ -477,6 +500,7 @@ export class Viewer3D {
   load(daeText) {
     // 사람 시점 종료는 기존 층의 단면을 복원하므로 그룹을 비우기 전에 끝낸다.
     if (this.person) this.leavePerson();
+    this.clearSpot();
     if (this.model) this.scene.remove(this.model);
     this.clearStencils();
     // ColladaLoader가 단위(mm → m)와 Z-위 축을 맞춰 준다.
@@ -543,6 +567,142 @@ export class Viewer3D {
     return this.floors();
   }
 
+  /** 모델을 비워 아무것도 열지 않은 처음 상태로 돌린다. */
+  clear() {
+    if (this.person) this.leavePerson();
+    this.clearSpot();
+    this.fly = null;
+    this.setFurniture(null);
+    this.clearStencils();
+    if (this.model) this.scene.remove(this.model);
+    this.model = null;
+    this.groups.clear();
+    this.clipped.clear();
+    this.levels.clear();
+    this.meshes = [];
+    this.walkable = [];
+    this.obstacles = [];
+    this.elevators = [];
+    this.ground = null;
+    this.state = { roof: true, site: true, furniture: true, hiddenFloors: new Set(), cut: null };
+    this.cap.visible = false;
+  }
+
+  /**
+   * 검토 지점을 빨간 상자로 표시하고 그 자리를 비스듬히 내려다보게 간다. 표시했으면 true.
+   * spot: { floor, position: [x, y, z](mm, Z 위. furniture.json과 같은 건물 좌표), direction: [ux, uy], width, thickness(mm) }
+   * coveredLeft: 화면 왼쪽을 가리는 것(상세 카드)의 폭 비율(0~1). 지점이 남은 영역의 가운데에 오게 한다.
+   */
+  focusSpot(spot, coveredLeft = 0) {
+    this.clearSpot();
+    const group = this.groups.get(spot.floor);
+    if (!this.model || !group || !spot.position) return false;
+    if (this.person) this.leavePerson();
+    this.model.updateMatrixWorld(true);
+    const [x, y, z] = spot.position;
+    const [ux, uy] = spot.direction;
+    // 층 묶음 안은 건물 좌표(mm)다. 가구와 같은 방법으로 화면 좌표로 옮긴다.
+    const base = group.localToWorld(new THREE.Vector3(x, y, z));
+    const along = group.localToWorld(new THREE.Vector3(x + ux * 1000, y + uy * 1000, z)).sub(base);
+    const meter = along.length(); // 1m가 화면 좌표로 얼마인지
+    along.normalize();
+    const size = new THREE.Vector3(
+      (spot.width / 1000 + SPOT_MARGIN * 2) * meter, SPOT_HEIGHT * meter, (spot.thickness / 1000 + SPOT_MARGIN * 2) * meter,
+    );
+    const geometry = new THREE.BoxGeometry(size.x, size.y, size.z);
+    const marker = new THREE.Mesh(geometry, new THREE.MeshBasicMaterial({
+      color: SPOT_COLOR, transparent: true, opacity: 0.22, depthWrite: false, depthTest: false,
+    }));
+    const edges = new THREE.LineSegments(new THREE.EdgesGeometry(geometry),
+      new THREE.LineBasicMaterial({ color: SPOT_COLOR, depthTest: false }));
+    marker.add(edges);
+    marker.position.copy(base).setY(base.y + size.y / 2);
+    marker.rotation.y = Math.atan2(-along.z, along.x);
+    marker.renderOrder = 5; // 벽에 가려도 보이게 맨 나중에 그린다
+    edges.renderOrder = 6;
+    marker.raycast = () => {};
+    edges.raycast = () => {};
+    this.scene.add(marker);
+    this.spot = marker;
+    // 지금 보던 방향을 유지한 채 비스듬히 내려다본다.
+    const target = base.clone().setY(base.y + 1.0 * meter);
+    const from = this.camera.position.clone().sub(this.controls.target).setY(0);
+    if (from.lengthSq() < 1e-6) from.set(Math.sin(START_AZIMUTH), 0, Math.cos(START_AZIMUTH));
+    from.normalize();
+    const distance = Math.max(SPOT_VIEW_M, (spot.width / 1000) * 2.5) * meter;
+    const position = target.clone().addScaledVector(from, Math.cos(CUT_ELEVATION) * distance);
+    position.y += Math.sin(CUT_ELEVATION) * distance;
+    if (coveredLeft > 0) {
+      // 카메라와 보는 점을 함께 왼쪽으로 옮기면 지점은 화면 오른쪽으로 간다.
+      const half = Math.tan(THREE.MathUtils.degToRad(FOV_OUTSIDE) / 2) * this.camera.aspect * distance;
+      const right = new THREE.Vector3().crossVectors(target.clone().sub(position), this.camera.up).normalize();
+      const shift = right.multiplyScalar(-Math.min(coveredLeft, 0.8) * half);
+      target.add(shift);
+      position.add(shift);
+    }
+    this.flyTo(target, position);
+    return true;
+  }
+
+  clearSpot() {
+    if (!this.spot) return;
+    this.scene.remove(this.spot);
+    this.spot.traverse((obj) => { obj.geometry?.dispose(); obj.material?.dispose(); });
+    this.spot = null;
+  }
+
+  /** 높이(m)에 있는 사람이 속한 층. 층 바닥이 height + FLOOR_SWITCH 이하인 층 가운데 가장 높은 층이다. */
+  floorAt(height) {
+    const keys = this.floors().filter((key) => this.levels.has(key))
+      .sort((a, b) => this.levels.get(a) - this.levels.get(b));
+    let found = keys[0] ?? null;
+    for (const key of keys) if (this.levels.get(key) <= height + FLOOR_SWITCH) found = key;
+    return found;
+  }
+
+  /**
+   * 사람 시점의 위치와 보는 방향(미니맵용). 사람 시점이 아니면 null.
+   * x·z는 모델 좌표(m), dirX·dirZ는 보는 방향(수평 단위 벡터), hfov는 수평 화각(rad), floor는 서 있는 층.
+   */
+  personPose() {
+    if (!this.person) return null;
+    const { x, y, z } = this.camera.position;
+    const half = Math.atan(Math.tan(THREE.MathUtils.degToRad(this.camera.fov) / 2) * this.camera.aspect);
+    return {
+      x, z, dirX: -Math.sin(this.person.yaw), dirZ: -Math.cos(this.person.yaw), hfov: half * 2,
+      floor: this.floorAt(this.person.ground ?? y - EYE_HEIGHT),
+    };
+  }
+
+  /**
+   * 층 평면(미니맵용). 좌표는 [x, z] m이고 화면에서는 z가 아래쪽이다(도면과 같은 방향).
+   * cuts: 바닥에서 CUT_HEIGHT 위를 수평으로 자른 선(벽·기둥·문·창·난간). 내부 보기와 같은 높이라 문 자리가 뚫려 보인다.
+   * fills: 위에서 내려다본 삼각형(바닥판, 계단, 바닥 구멍으로 보이는 아래층 계단).
+   * bounds: 모든 층을 담는 범위. 층이 바뀌어도 지도 축척과 위치가 같다.
+   */
+  floorPlan(key) {
+    if (!this.model || !this.levels.has(key)) return null;
+    this.model.updateMatrixWorld(true);
+    const keys = this.floors();
+    const box = new THREE.Box3();
+    for (const k of keys) box.expandByObject(this.groups.get(k));
+    const helpers = new Set(this.stencils);
+    const meshesOf = (floor, suffix) => {
+      const found = [];
+      this.groups.get(`${floor}_${suffix}`)?.traverse((obj) => { if (obj.isMesh && !helpers.has(obj)) found.push(obj); });
+      return found;
+    };
+    const height = this.levels.get(key) + CUT_HEIGHT;
+    const cut = (suffix) => meshesOf(key, suffix).flatMap((mesh) => stitchLoops(sectionSegments(mesh, height)));
+    const top = (floor, suffix) => meshesOf(floor, suffix).flatMap((mesh) => topTriangles(mesh));
+    const below = keys[keys.indexOf(key) - 1];
+    return {
+      bounds: { minX: box.min.x, maxX: box.max.x, minZ: box.min.z, maxZ: box.max.z },
+      fills: { stairBelow: below ? top(below, 'Stairs') : [], slab: top(key, 'Slabs'), stair: top(key, 'Stairs') },
+      cuts: { rail: cut('Rails'), window: cut('Windows'), door: cut('Doors'), wall: cut('Walls'), column: cut('Columns') },
+    };
+  }
+
   floors() {
     return [...this.groups.keys()]
       .filter((name) => FLOOR.test(name))
@@ -596,12 +756,19 @@ export class Viewer3D {
     if (!this.model || !data?.floors) return;
     const lineMaterial = new THREE.LineBasicMaterial({ color: FURNITURE_COLOR });
     this.clipped.add(lineMaterial);
-    const solidMaterials = Object.fromEntries(Object.entries(FURNITURE_SOLIDS).map(([kind, color]) => {
-      const m = prepare(new THREE.MeshStandardMaterial({ color, roughness: kind === 'fixture' ? 0.35 : 0.85 }));
-      m.name = `furniture_${kind}`;
-      this.clipped.add(m);
-      return [kind, m];
-    }));
+    // 재질은 쓰이는 것만 만든다. 이름은 'm:재질' 또는 예전 결과의 'k:종류'다.
+    const solidMaterials = new Map();
+    const materialFor = (solid) => {
+      const name = solid.m in FURNITURE_MATERIALS ? `m:${solid.m}` : `k:${solid.k}`;
+      if (!solidMaterials.has(name)) {
+        const spec = FURNITURE_MATERIALS[solid.m] || { color: FURNITURE_SOLIDS[solid.k] || FURNITURE_MATERIALS.panel.color, roughness: solid.k === 'fixture' ? 0.35 : 0.85 };
+        const m = prepare(new THREE.MeshStandardMaterial({ ...spec, transparent: (spec.opacity ?? 1) < 1 }));
+        m.name = `furniture_${solid.m || solid.k}`;
+        this.clipped.add(m);
+        solidMaterials.set(name, m);
+      }
+      return name;
+    };
     for (const [key, floor] of Object.entries(data.floors)) {
       const group = this.groups.get(key);
       if (!group) continue;
@@ -617,27 +784,32 @@ export class Viewer3D {
         lines.raycast = () => {};
         parts.push(lines);
       }
-      // 같은 종류는 한 덩어리로 합친다. 가구가 수백 개라 따로 그리면 느려진다.
-      const byKind = new Map();
+      // 같은 재질은 한 덩어리로 합친다. 부재가 수천 개라 따로 그리면 느려진다. 지나갈 수 있는 가구와 막는 가구는 나눈다.
+      const batches = new Map();
       for (const solid of floor.solids || []) {
-        if (!(solid.k in FURNITURE_SOLIDS) || solid.p.length < 3 || solid.z1 <= solid.z0) continue;
+        if (!solid.p || solid.p.length < 3 || solid.z1 <= solid.z0) continue;
         const shape = new THREE.Shape(solid.p.map(([x, y]) => new THREE.Vector2(x, y)));
+        // 구멍(h): 개수대의 볼, 변기 좌판처럼 뚫린 자리
+        for (const hole of solid.h || []) shape.holes.push(new THREE.Path(hole.map(([x, y]) => new THREE.Vector2(x, y))));
         const geometry = new THREE.ExtrudeGeometry(shape, { depth: solid.z1 - solid.z0, bevelEnabled: false, curveSegments: 1 });
         geometry.translate(0, 0, floor.z + solid.z0);
-        if (!byKind.has(solid.k)) byKind.set(solid.k, []);
-        byKind.get(solid.k).push(geometry);
+        const blocking = !FURNITURE_PASSABLE.has(solid.k);
+        const name = `${materialFor(solid)}|${blocking ? 'block' : 'pass'}`;
+        if (!batches.has(name)) batches.set(name, { material: materialFor(solid), blocking, geometries: [] });
+        batches.get(name).geometries.push(geometry);
       }
-      for (const [kind, geometries] of byKind) {
-        const mesh = new THREE.Mesh(mergeGeometries(geometries), solidMaterials[kind]);
-        mesh.name = `${key}_Furniture_${kind}`;
-        mesh.castShadow = true;
+      for (const [name, batch] of batches) {
+        const material = solidMaterials.get(batch.material);
+        const mesh = new THREE.Mesh(mergeGeometries(batch.geometries), material);
+        mesh.name = `${key}_Furniture_${name}`;
+        mesh.castShadow = !material.transparent; // 유리는 그림자를 드리우지 않는다
         mesh.receiveShadow = true;
         mesh.userData.mats = { arch: mesh.material, class: mesh.material };
         const edges = new THREE.LineSegments(new THREE.EdgesGeometry(mesh.geometry, 25), this.edgeMaterials.building);
         edges.raycast = () => {};
         mesh.add(edges);
         this.meshes.push({ mesh, building: true }); // 단면 칠하기·스타일 바꾸기를 같이 받는다
-        if (FURNITURE_BLOCKING.has(kind)) this.obstacles.push(mesh);
+        if (batch.blocking) this.obstacles.push(mesh);
         parts.push(mesh);
       }
       for (const obj of parts) {
@@ -647,7 +819,7 @@ export class Viewer3D {
         this.furniture.push(obj);
       }
     }
-    for (const m of [lineMaterial, ...Object.values(solidMaterials)]) {
+    for (const m of [lineMaterial, ...solidMaterials.values()]) {
       m.clippingPlanes = this.activeCut() ? [this.cutPlane] : null;
     }
     this.buildElevators(data.elevators || []);
@@ -1096,6 +1268,79 @@ function unwrap(list) {
 function isShownTree(obj) {
   for (let o = obj; o; o = o.parent) if (!o.visible) return false;
   return true;
+}
+
+/** 메시의 삼각형 꼭짓점을 세계 좌표로 차례로 넘긴다. */
+function eachTriangle(mesh, visit) {
+  const position = mesh.geometry.getAttribute('position');
+  const index = mesh.geometry.getIndex();
+  const count = index ? index.count : position.count;
+  const v = [new THREE.Vector3(), new THREE.Vector3(), new THREE.Vector3()];
+  for (let i = 0; i + 2 < count; i += 3) {
+    for (let k = 0; k < 3; k += 1) {
+      v[k].fromBufferAttribute(position, index ? index.getX(i + k) : i + k).applyMatrix4(mesh.matrixWorld);
+    }
+    visit(v[0], v[1], v[2]);
+  }
+}
+
+/** 메시를 높이 y의 수평면으로 자른 선분들. [[x, z], [x, z]] */
+function sectionSegments(mesh, y) {
+  const segments = [];
+  eachTriangle(mesh, (a, b, c) => {
+    const points = [];
+    for (const [p, q] of [[a, b], [b, c], [c, a]]) {
+      const dp = p.y - y;
+      const dq = q.y - y;
+      if ((dp < 0) === (dq < 0)) continue;
+      const t = dp / (dp - dq);
+      points.push([p.x + (q.x - p.x) * t, p.z + (q.z - p.z) * t]);
+    }
+    if (points.length === 2) segments.push(points);
+  });
+  return segments;
+}
+
+/** 선분을 끝점(1mm 단위)끼리 이어 닫힌 선으로 만든다. 닫히지 않은 것은 closed가 false다. */
+function stitchLoops(segments) {
+  const keyOf = ([x, z]) => `${Math.round(x * 1000)},${Math.round(z * 1000)}`;
+  const ends = new Map();
+  segments.forEach((segment, i) => segment.forEach((point) => {
+    const key = keyOf(point);
+    if (!ends.has(key)) ends.set(key, []);
+    ends.get(key).push(i);
+  }));
+  const used = new Uint8Array(segments.length);
+  const loops = [];
+  for (let i = 0; i < segments.length; i += 1) {
+    if (used[i]) continue;
+    used[i] = 1;
+    const points = [segments[i][0], segments[i][1]];
+    let closed = false;
+    for (;;) {
+      const tail = keyOf(points[points.length - 1]);
+      const next = ends.get(tail).find((j) => !used[j]);
+      if (next === undefined) {
+        closed = points.length > 2 && keyOf(points[0]) === tail;
+        break;
+      }
+      used[next] = 1;
+      const [a, b] = segments[next];
+      points.push(keyOf(a) === tail ? b : a);
+    }
+    loops.push({ points, closed });
+  }
+  return loops;
+}
+
+/** 위에서 내려다본 삼각형들. 한쪽을 향한 면만 고른다(윗면과 밑면이 겹치면 채우기가 서로 지워진다). [[x, z], [x, z], [x, z]] */
+function topTriangles(mesh) {
+  const triangles = [];
+  eachTriangle(mesh, (a, b, c) => {
+    const area = (b.x - a.x) * (c.z - a.z) - (c.x - a.x) * (b.z - a.z);
+    if (area > 1e-6) triangles.push([[a.x, a.z], [b.x, b.z], [c.x, c.z]]);
+  });
+  return triangles;
 }
 
 function hasAncestor(obj, test) {

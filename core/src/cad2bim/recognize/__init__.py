@@ -1,8 +1,9 @@
 """요소 인식. 기둥, 벽, 개구부, 실 순서로 찾는다."""
 from __future__ import annotations
 
+import math
 from collections import Counter
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from typing import Any
 
 import numpy as np
@@ -167,6 +168,57 @@ def _pair_rails(rails: list[tuple[Any, Any, Primitive]], cfg: dict[str, Any]) ->
     return merged
 
 
+_ARC_CENTER_TOL_MM = 5.0
+
+
+def facet_wall_arcs(prims: list[Primitive], layers: LayerMap, step_deg: float) -> list[Primitive]:
+    """벽 레이어의 호를 현(짧은 직선)으로 바꾼다. step_deg가 0이면 그대로 둔다(곡선 벽은 '미지원'으로 남는다).
+
+    벽의 안쪽 호와 바깥쪽 호를 같은 각도에서 끊어야 현끼리 나란해져 벽 두 줄로 짝지어진다.
+    그래서 호마다 등분하지 않고, 0도에서 step_deg씩 나눈 같은 각도 눈금에서 끊는다.
+    같은 중심의 벽 호 사이에 낀 창호 레이어의 호(곡면 유리)도 함께 바꾼다. 문이 열리는 호는 중심이 달라 남는다.
+    """
+    if step_deg <= 0:
+        return prims
+    wall_arcs = [p for p in prims if p.kind == "arc" and not p.block_path and layers.role(p.layer) == "WALL"]
+    if not wall_arcs:
+        return prims
+
+    def between_wall_arcs(p: Primitive) -> bool:
+        cx, cy = p.geometry["center"]
+        radii = [
+            w.geometry["radius"] for w in wall_arcs
+            if math.dist((cx, cy), w.geometry["center"]) <= _ARC_CENTER_TOL_MM
+        ]
+        return len(radii) >= 2 and min(radii) - 1.0 <= p.geometry["radius"] <= max(radii) + 1.0
+
+    step = math.radians(step_deg)
+    result: list[Primitive] = []
+    for p in prims:
+        curved = p.kind == "arc" and not p.block_path and (
+            layers.role(p.layer) == "WALL" or (layers.role(p.layer) == "WINDOW" and between_wall_arcs(p))
+        )
+        if not curved:
+            result.append(p)
+            continue
+        (cx, cy), radius = p.geometry["center"], p.geometry["radius"]
+        start = math.atan2(p.geometry["start"][1] - cy, p.geometry["start"][0] - cx)
+        sweep = (math.atan2(p.geometry["end"][1] - cy, p.geometry["end"][0] - cx) - start) % (2 * math.pi) or 2 * math.pi
+        cuts = [0.0]
+        tick = (math.floor(start / step) + 1) * step - start  # 시작점 다음의 첫 눈금까지
+        while tick < sweep - 1e-9:
+            if tick > 1e-9:
+                cuts.append(tick)
+            tick += step
+        cuts.append(sweep)
+        points = [(cx + radius * math.cos(start + t), cy + radius * math.sin(start + t)) for t in cuts]
+        for k, (a, b) in enumerate(zip(points, points[1:])):
+            result.append(replace(
+                p, id=f"{p.id}~{k}", kind="line", geometry={"p1": a, "p2": b}, extra={**p.extra, "from_arc": True},
+            ))
+    return result
+
+
 def recognize(
     prims: list[Primitive], layers: LayerMap, cfg: dict[str, Any], patterns: dict, walls_only: bool = False
 ) -> Recognition:
@@ -176,11 +228,19 @@ def recognize(
         (faceted_door_arc(p) or p) if layers.role(p.layer) != "WALL" else p
         for p in prims
     ]
+    # 곡선 벽은 짧은 직선 벽 여러 개로 바꿔 직선 벽과 같은 방법으로 찾는다.
+    wall_arcs = [p for p in prims if p.kind == "arc" and not p.block_path and layers.role(p.layer) == "WALL"]
+    prims = facet_wall_arcs(prims, layers, cfg["walls"].get("arc_step_deg", 0.0))
     hatches = HatchIndex(prims, patterns)
     with stage("columns"):
         drafts = recognize_columns(prims, layers, hatches, cfg["columns"])
     with stage("walls"):
         result = recognize_walls(prims, layers, drafts, hatches, cfg["walls"])
+        # 짝이 없어 벽이 되지 못한 호(선 한 줄로 그린 곡선 등)는 지금처럼 '미지원'으로 알린다.
+        built = {h for w in result.walls for h in w.handles}
+        result.curved = [p for p in wall_arcs if not built.intersection(p.source_handles)] + [
+            p for p in result.curved if p not in wall_arcs
+        ]
 
     if not walls_only:
         with stage("piers"):

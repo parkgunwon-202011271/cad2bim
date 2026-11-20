@@ -1240,3 +1240,32 @@ def test_lookup_of_stage_metric_in_benchmark(tmp_path):
     assert lookup(record["metrics"], "layers.accuracy") == 1
 
 
+def test_curved_wall_drawn_as_two_arcs_becomes_short_straight_walls(cfg, make_dxf, tmp_path):
+    """곡선 벽(안쪽·바깥쪽 호)은 같은 각도에서 끊어 짧은 직선 벽으로 만든다. 짝이 없는 호는 지금처럼 미지원이다."""
+    def build(doc, msp):
+        room(msp, w=12000, h=9000)
+        for radius in (2900, 3100):  # 두께 200의 사분원 벽
+            msp.add_arc((6000, 4500), radius, 0, 90, dxfattribs={"layer": "A-WALL"})
+        noise(msp)
+
+    ir = convert_built(cfg, make_dxf, tmp_path, build).ir
+    assert ir.unsupported == []
+    curved = [w for w in ir.walls if all(2800 < math.dist(p, (6000, 4500)) < 3200 for p in (w.start, w.end))]
+    assert len(curved) == 6  # 90도를 15도씩
+    assert all(abs(w.thickness - 200) <= 5 for w in curved)
+    assert sum(math.dist(w.start, w.end) for w in curved) == pytest.approx(math.pi / 2 * 3000, rel=0.05)  # 현이라 호보다 조금 짧다
+
+
+def test_window_lines_inside_an_unbroken_wall_make_a_window(cfg, make_dxf, tmp_path):
+    """유리 외벽을 '벽 두 줄 + 그 사이 유리선'으로 그린 도면. 벽이 끊기지 않아도 유리선이 지나가는 구간이 창이다."""
+    def build(doc, msp):
+        room(msp)
+        for y in (-30, 30):  # 아래 벽(y=0, 두께 200) 안의 유리선 두 줄
+            msp.add_line((1500, y), (4500, y), dxfattribs={"layer": "A-GLAZ"})
+        msp.add_line((100, 3980), (2000, 3980), dxfattribs={"layer": "A-GLAZ"})  # 한 줄뿐인 선은 창이 아니다
+        noise(msp)
+
+    ir = convert_built(cfg, make_dxf, tmp_path, build).ir
+    windows = [o for o in ir.openings if o.type == "window"]
+    assert [(round(o.position), round(o.width)) for o in windows] == [(3000, 3000)]
+    assert windows[0].confidence.reasons == ["window_in_wall"] or "window_in_wall" in windows[0].confidence.reasons

@@ -10,6 +10,10 @@
   --color-bg-subtle: #f8f9fb;
   --color-bg-viewer: #eceef1;
   --color-bg-overlay: rgba(17, 24, 39, 0.55);
+  --color-bg-rail: #e8f4fb;            /* 왼쪽 작업 메뉴 띠 */
+  --color-bg-rail-hover: rgba(255, 255, 255, 0.5);
+  --color-bg-floating: rgba(255, 255, 255, 0.66);   /* 3D 뷰어 위에 겹치는 연한 안내·버튼 */
+  --color-bg-floating-hover: rgba(255, 255, 255, 0.92);
 
   /* color/border */
   --color-border-default: #e2e5ea;
@@ -27,7 +31,10 @@
 
   /* color/status */
   --color-status-success: #15803d;
+  --color-status-success-subtle: #e7f5ec;
   --color-status-danger: #dc2626;
+  --color-status-warning: #d97706;
+  --color-status-warning-subtle: #fdf3e1;
 
   /* font */
   --font-family-base: "Malgun Gothic", "Segoe UI", system-ui, sans-serif;

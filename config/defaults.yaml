@@ -25,6 +25,7 @@ regions:
   frame_min_content_share: 0.95
   sheet_size_tolerance: 0.01  # 나란한 도곽끼리 크기 차이
   min_frame_side_mm: 3000.0
+  frame_line_pair_mm: 600.0   # 선으로 그린 도곽 칸: 이 거리 안에 나란한 긴 선이 또 있으면 벽(두 줄)으로 보고 칸으로 치지 않는다
   plan_min_share_of_largest: 0.05
   frame_span_share: 0.9      # 이만큼 도곽을 가로지르는 선은 도곽선이나 표제란 경계다
   frame_band_share: 0.3      # 도곽 가장자리에서 이 비율 안의 선만 경계로 본다
@@ -127,6 +128,7 @@ walls:
   axis_tolerance_mm: 15.0
   max_bridge_mm: 4000.0      # 이보다 넓은 틈은 개구부로 보지 않는다
   min_wall_length_mm: 300.0
+  arc_step_deg: 15.0          # 곡선 벽을 이 각도마다 끊어 짧은 직선 벽으로 만든다. 0이면 곡선 벽을 만들지 않는다(미지원으로 남김)
   junction_tolerance_mm: 50.0
   opening_fill_min_share: 0.5
   single_line_min_mm: 500.0
@@ -154,6 +156,10 @@ openings:
   leaf_line_tolerance_mm: 30.0  # 문짝 선 끝이 경첩·호 끝과 이만큼 안에 있으면 그 호의 문짝이다
   line_min_coverage: 0.8
   window_min_lines: 2
+  # 벽선이 끊기지 않고 벽 두께 안에 창호 선이 나란히 지나가는 구간을 창으로 본다(유리 외벽). 0이면 끈다.
+  window_in_wall_min_mm: 600.0   # 이보다 짧은 구간은 창으로 보지 않는다
+  window_in_wall_gap_mm: 150.0   # 창틀로 끊긴 간격이 이보다 작으면 한 창으로 잇는다
+  window_in_wall_tol_mm: 10.0    # 벽 면에서 이만큼 벗어난 선까지 벽 안의 선으로 본다
   door_gap_reach_mm: 300.0   # 벽 틈 둘레 이 거리 안의 문 레이어 선을 본다
   door_gap_min_share: 0.5    # 문 레이어 선이 틈 폭의 이 비율 이상이면 문(호 없는 미닫이·오버헤드·방열문)
 
@@ -214,23 +220,35 @@ export:
   elevator_max_side_mm: 4000.0
   elevator_label_reach_mm: 300.0
   elevator_door_reach_mm: 1000.0  # 승강로 표시(카 외곽)에서 이 거리 안의 벽 개구부를 승강기 문으로 본다. 카와 벽 사이 틈과 벽 두께 절반을 넘는다
-  # 가구 이름표. 가구 도형 안이나 이 거리 안의 글자로 종류와 높이를 정한다. 없으면 크기로 짐작한다.
+  # 가구 이름표. 가구 도형 안이나 이 거리 안의 글자, 가구를 가리키는 지시선 글자로 종류를 정한다. 없으면 기호와 크기로 가늠한다.
+  # kind는 만들 모양이다(core/src/cad2bim/export/furniture_models.py). z0·z1을 적으면 그 높이를 쓰고, m은 몸통 재질이다.
+  # skip: 만들지 않는다. ignore: 이 글자는 이름표로 쓰지 않는다(여러 가구를 한꺼번에 가리키는 글자).
   furniture_label_reach_mm: 900.0
   furniture_labels:
     - {pattern: "비상벨|emergency", kind: skip}            # 벽에 다는 장치
     - {pattern: "엘리베이터|승강기|^\\s*E\\s*[./]?\\s*V", kind: skip}  # 승강로는 따로 만든다
+    - {pattern: "\\bset\\b|세트", kind: ignore}            # 'SOFA&TABLE SET'처럼 묶음을 가리키는 글자
+    - {pattern: "upper\\s*shelf|상부\\s*(장|선반)", kind: upper}
+    - {pattern: "bar\\s*(chair|stool)|바\\s*(의자|체어)|스툴", kind: bar_stool}
+    - {pattern: "bar\\s*table|바\\s*테이블", kind: bar}
+    - {pattern: "work\\s*table|작업대|조리대", kind: counter, m: steel}
+    - {pattern: "sink|싱크|개수대", kind: sink}
+    - {pattern: "stove|gas\\s*range|레인지|화구", kind: stove}
+    - {pattern: "^\\s*ref\\b\\.?|refrig|냉장|냉동", kind: fridge}
+    - {pattern: "자판기|vending", kind: appliance, z0: 0, z1: 1800}
+    - {pattern: "show\\s*case|쇼케이스|진열", kind: showcase}
+    - {pattern: "counter|카운터", kind: counter, z1: 1000}
     - {pattern: "정수기|water", kind: appliance, z0: 0, z1: 1200}
     - {pattern: "키오스크|kiosk", kind: appliance, z0: 0, z1: 1500}
-    - {pattern: "냉장고|자판기|refrig|vending", kind: appliance, z0: 0, z1: 1800}
     - {pattern: "소화전|소화기|hydrant|extinguish", kind: appliance, z0: 0, z1: 1500}
-    - {pattern: "소변기|urinal", kind: fixture, z0: 350, z1: 1000}  # 벽걸이
-    - {pattern: "대변기|양변기|toilet|w\\.?c", kind: fixture, z0: 0, z1: 400}
-    - {pattern: "세면|lav", kind: counter, z0: 0, z1: 850}
+    - {pattern: "소변기|urinal", kind: urinal, z0: 350, z1: 1000}  # 벽걸이
+    - {pattern: "대변기|양변기|toilet|w\\.?c", kind: toilet}
+    - {pattern: "wash\\s*stand|세면|lav", kind: vanity}
     - {pattern: "^\\s*S\\.?\\s*K|청소|mop", kind: fixture, z0: 0, z1: 600}
-    - {pattern: "신발장|shoe", kind: shelf, z0: 0, z1: 1200}
-    - {pattern: "사물함|락커|locker", kind: shelf, z0: 0, z1: 1800}
-    - {pattern: "책장|서가|book", kind: shelf, z0: 0, z1: 2000}
-    - {pattern: "소파|sofa", kind: chair, z0: 0, z1: 750}
+    - {pattern: "신발장|shoe", kind: cabinet, z1: 1200}
+    - {pattern: "사물함|락커|locker|수납장|캐비닛|cabinet|문서함", kind: cabinet, z1: 1800}
+    - {pattern: "책장|서가|book|shelf|선반", kind: shelf, z1: 1800}
+    - {pattern: "소파|sofa|안마의자", kind: sofa}
   # ㄷ자 계단의 계단참을 계단 범위 밖에 둘 때. 깊이는 끝에서 벽까지이되 이 사이로 맞춘다
   stair_max_riser_mm: 200.0      # 단 높이가 이를 넘으면 평면의 계단을 위로 되풀이한다(층고가 높은 층)
   stair_landing_min_mm: 900.0

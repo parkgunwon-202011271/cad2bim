@@ -743,3 +743,67 @@ def test_far_coordinates_are_moved_near_origin(make_dxf, cfg):
     assert (ox, oy) == (157_000.0, 54_000.0)  # 평면 중심을 1m 단위로 반올림
     x0, y0, x1, y1 = pre.plan_bbox
     assert max(abs(x0), abs(x1), abs(y0), abs(y1)) < 10_000
+
+
+def _cell_sheet(cells=3, double=False):
+    """가로 20m, 세로 30m 칸을 나란히 선으로 그리고 칸마다 그림(선 30개)을 넣는다."""
+    prims, n = [], 0
+    def add(p1, p2):
+        nonlocal n
+        n += 1
+        prims.append(line(p1, p2, pid=f"L{n}"))
+    width, height = 20000.0, 30000.0
+    for x in [i * width for i in range(cells + 1)]:
+        add((x, 0.0), (x, height))
+        if double:
+            add((x + 200.0, 0.0), (x + 200.0, height))
+    for y in (0.0, height):
+        for i in range(cells):
+            add((i * width, y), ((i + 1) * width, y))
+    for i in range(cells):
+        for k in range(30):
+            add((i * width + 5000.0, 5000.0 + k * 300.0), (i * width + 15000.0, 5000.0 + k * 300.0))
+    return prims
+
+
+def test_cells_drawn_with_lines_split_a_sheet_into_one_drawing_each(cfg):
+    """한 장에 평면도·천장도·입면도를 선으로 그린 칸에 나눠 그린 도면. 칸마다 도면 하나로 나눈다."""
+    from cad2bim.errors import RegionAmbiguousError
+    from cad2bim.preprocess.regions import line_cells
+
+    prims = _cell_sheet()
+    cells, frame_lines = line_cells(prims, cfg["regions"])
+    assert cells == [(0.0, 0.0, 20000.0, 30000.0), (20000.0, 0.0, 40000.0, 30000.0), (40000.0, 0.0, 60000.0, 30000.0)]
+    kept, excluded, frames = strip_frames(prims, cfg["regions"])
+    assert frames == cells and len(excluded) == len(frame_lines) == 10 and len(kept) == 90
+    with pytest.raises(RegionAmbiguousError) as error:
+        select_plan(kept, cfg["regions"], frames, None, cells)
+    assert len(error.value.candidates) == 3
+    plan, outside = select_plan(kept, cfg["regions"], frames, error.value.candidates[1])
+    assert len(plan) == 30 and len(outside) == 60  # 가운데 칸의 그림만
+
+
+def test_rooms_bounded_by_double_wall_lines_are_not_sheet_cells(cfg):
+    from cad2bim.preprocess.regions import line_cells
+
+    assert line_cells(_cell_sheet(double=True), cfg["regions"]) == ([], set())
+    assert line_cells(_cell_sheet(cells=1), cfg["regions"]) == ([], set())  # 칸 하나는 그냥 큰 사각형이다
+
+
+def test_multileader_text_becomes_a_leader_at_the_arrow_tip(make_dxf):
+    """지시선 글자는 화살표 끝 자리의 leader 요소가 된다. 실 이름을 찾는 단계가 보지 않도록 text와 구분한다."""
+    from ezdxf.math import Vec2
+    from ezdxf.render import mleader
+
+    def build(doc, msp):
+        builder = msp.add_multileader_mtext("Standard")
+        builder.set_content("WORK TABLE")
+        builder.add_leader_line(mleader.ConnectionSide.left, [Vec2(1000, 2000)])
+        builder.build(insert=Vec2(3000, 2500))
+
+    prims, stats = extract_primitives(ezdxf.readfile(make_dxf(build)), 1.0)
+    leaders = [p for p in prims if p.kind == "leader"]
+    assert [p.geometry["text"] for p in leaders] == ["WORK TABLE"]
+    assert leaders[0].geometry["position"] == pytest.approx((1000, 2000))
+    assert leaders[0].points() == [leaders[0].geometry["position"]]
+    assert not any(p.kind == "text" for p in prims) and "MULTILEADER" not in stats.unsupported

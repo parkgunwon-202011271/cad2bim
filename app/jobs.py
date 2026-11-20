@@ -4,6 +4,7 @@
 """
 from __future__ import annotations
 
+import json
 import os
 import re
 import shutil
@@ -132,6 +133,66 @@ def run_build(folder: Path, emit: Emit) -> Path:
     app_dir.mkdir(parents=True, exist_ok=True)
     (app_dir / "build.txt").write_text(stdout, encoding="utf-8")
     return out_dir
+
+
+def load_review(out_dir: Path) -> dict:
+    """검토 패널에 보일 지점 목록(_llm/review.json). 없거나 읽지 못하면 빈 목록. 그림 경로는 결과 폴더 기준이다."""
+    path = Path(out_dir) / "_llm" / "review.json"
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return {"answers": [], "items": []}
+    # review.json의 답은 마지막 빌드에 적용된 것이다. 그 뒤 사람이 고친 답(decisions.json)을 겹쳐,
+    # 지금 답(decision)과 모델에 반영된 답(applied)이 다르면 화면이 '적용 안 된 변경'으로 보여 준다.
+    current = _read_decisions(out_dir)
+    items = []
+    for item in data.get("items", []):
+        image = Path(out_dir) / "_llm" / item["image"] if item.get("image") else None
+        items.append({
+            **item, "image": image if image is not None and image.is_file() else None,
+            "applied": (item.get("decision") or {}).get("answer"), "decision": current.get(item["key"]),
+        })
+    return {"answers": data.get("answers", []), "items": items}
+
+
+def _read_decisions(out_dir: Path) -> dict:
+    try:
+        data = json.loads((Path(out_dir) / "_llm" / "decisions.json").read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return {}
+    return dict(data.get("decisions", {}))
+
+
+def set_review_decision(out_dir: Path, key: str, answer: str | None) -> dict | None:
+    """검토 지점의 답을 사람이 정한다(model: "user"). answer가 None이면 사람 답을 지우고 AI 답으로 되돌린다.
+
+    AI가 골랐던 답은 ai에 남겨 화면에서 'AI: 문 → 사람: 벽'처럼 보여 준다. 저장 형식은 코어(review.py)와 같다.
+    모델에는 다음 빌드에서 반영된다. 바뀐 뒤의 답(없으면 None)을 돌려준다. 모르는 지점·답이면 ValueError.
+    """
+    review = load_review(out_dir)
+    if key not in {item["key"] for item in review["items"]}:
+        raise ValueError("이 결과에 없는 검토 지점입니다.")
+    if answer is not None and answer not in review["answers"]:
+        raise ValueError("고를 수 없는 답입니다.")
+    decisions = _read_decisions(out_dir)
+    now = decisions.get(key)
+    ai = now.get("ai") if now and now.get("model") == "user" else now
+    if answer is None:
+        entry = ai
+    else:
+        entry = {"answer": answer, "reason": "", "model": "user"}
+        if ai:
+            entry["ai"] = {k: ai.get(k, "") for k in ("answer", "reason", "model")}
+    if entry:
+        decisions[key] = entry
+    else:
+        decisions.pop(key, None)
+    directory = Path(out_dir) / "_llm"
+    directory.mkdir(parents=True, exist_ok=True)
+    (directory / "decisions.json").write_text(
+        json.dumps({"decisions": dict(sorted(decisions.items()))}, ensure_ascii=False, indent=1), encoding="utf-8",
+    )
+    return entry
 
 
 def resolve_result(folder: Path) -> Path:
