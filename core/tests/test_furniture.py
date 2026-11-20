@@ -90,6 +90,25 @@ def test_strip_beside_a_seat_is_the_backrest():
     assert back["polygon"].bounds[0] >= 450.0  # 등받이는 띠를 그린 쪽에 선다
 
 
+def test_chairs_in_a_row_each_keep_their_own_backrest():
+    """앞뒤로 붙여 놓은 의자: 앞 의자의 등받이 띠가 뒤 의자의 좌판에도 닿는다. 띠는 제 띠가 없는 쪽 의자의 것이다."""
+    shapes = []
+    for y in (0, 550, 1100):
+        shapes += [box(0, y, 450, y + 450), box(0, y + 450, 450, y + 550)]  # 좌판, 등받이(위쪽)
+    found = recognise(shapes)
+    assert [item.kind for item in found] == ["chair"] * 3
+    assert all(item.band == pytest.approx((0.0, 1.0)) and item.band_mm == pytest.approx(100.0) for item in found)
+
+
+def test_back_to_back_chairs_share_one_backrest_strip():
+    """주민센터 1층: 등을 맞댄 두 의자 사이에 등받이 띠를 하나만 그렸다. 두 의자 모두 그 띠 쪽이 등받이다."""
+    found = recognise([box(0, 0, 450, 450), box(0, 450, 450, 550), box(0, 550, 450, 1000)])
+    assert [item.kind for item in found] == ["chair", "chair"]
+    lower, upper = sorted(found, key=lambda item: item.polygon.centroid.y)
+    assert lower.band == pytest.approx((0.0, 1.0)) and upper.band == pytest.approx((0.0, -1.0))
+    assert all(len(build(item)) == 6 for item in found)
+
+
 def test_chair_without_a_strip_faces_the_nearest_table():
     table, chair = box(0, 0, 1800, 700), box(600, 760, 1100, 1260)
     found = {item.kind: item for item in recognise([table, chair])}
@@ -197,6 +216,33 @@ def test_toilet_is_a_bowl_with_its_tank():
     parts = build(found[0])
     assert max(p["z1"] for p in parts) == 800.0  # 물탱크
     assert any(p["holes"] for p in parts)  # 좌판은 가운데가 뚫렸다
+
+
+def test_two_lines_standing_alone_are_a_partition_and_a_stall_beside_a_toilet():
+    """디젤 도면의 변기 사이 가벽: 닫힌 도형이 아니라 선 두 줄(두께 40)로 그렸다."""
+    from shapely import affinity
+
+    divider = lines_of(box(0, 0, 40, 1260))
+    found = recognise(chains=divider)
+    assert [item.kind for item in found] == ["partition"]
+    assert max(p["z1"] for p in build(found[0])) == 1200.0
+
+    bowl = affinity.scale(Point(400, 600).buffer(1.0, quad_segs=8), 180, 250)
+    tank = box(175, 850, 625, 1050)
+    found = {item.kind: item for item in recognise([bowl, tank], chains=divider)}
+    assert set(found) == {"toilet", "stall"}
+    stall = build(found["stall"])
+    assert (stall[0]["z0"], stall[0]["z1"]) == (100.0, 2000.0)  # 바닥에서 띄운 높은 판
+
+
+def test_thin_gap_between_two_pieces_of_furniture_is_not_a_partition():
+    """양옆이 가구에 붙은 얇은 면은 가구 사이의 틈이다. 가구 앞에 바짝 붙은 선(손잡이)도 칸막이가 아니다."""
+    left, right = box(0, 0, 600, 1500), box(650, 0, 1250, 1500)
+    gap = [([(600, 0), (650, 0)], "A-FURN", True), ([(600, 1500), (650, 1500)], "A-FURN", True)]
+    found = recognise(chains=lines_of(left) + lines_of(right) + gap)
+    assert sorted(item.kind for item in found) == ["table", "table"]
+    handle = lines_of(box(1300, 100, 1330, 1400))  # 탁자 옆 50mm에 붙은 30mm 띠
+    assert sorted(item.kind for item in recognise(chains=lines_of(left) + lines_of(right) + handle)) == ["table", "table"]
 
 
 def test_floor_lines_use_model_coordinates_and_skip_other_plans(monkeypatch):
