@@ -63,8 +63,8 @@ def drawing_notes(kind: str) -> str:
     return "\n".join(_NOTES_COMMON + _NOTES_BY_KIND.get(kind, ())) + "\n\n"
 
 
-def consistent(answer: str, counts: dict[str, int], kind: str = "opening") -> bool:
-    """답이 도면 데이터와 정면으로 어긋나면 적용하지 않는다(대기 목록에 남긴다). 판단은 LLM이, 거르기는 계산으로.
+def conflict(answer: str, counts: dict[str, int], kind: str = "opening") -> str | None:
+    """답이 도면 데이터와 정면으로 어긋나면 그 이유(사람이 읽는 글), 아니면 None. 판단은 LLM이, 거르기는 계산으로.
 
     - 모서리 지점에 기둥이 있는데 벽이 아니라고 한 경우(벽 끝과 기둥 사이는 막혀 있다)
     - 상자에 문 레이어 선이나 원호가 있는데 열린 곳·벽이라고 하거나, 창 레이어 선이 있는데 벽이라고 한 경우
@@ -72,14 +72,23 @@ def consistent(answer: str, counts: dict[str, int], kind: str = "opening") -> bo
     """
     if counts.get("COLUMN"):
         # 모서리(벽 끝과 이웃 벽 사이)에 기둥이 있으면 막힌 자리다. 그 밖의 지점은 기둥 옆 문도 있어 어느 답이든 둔다
-        return answer == "wall" if kind == "corner" else True
-    if (counts.get("DOOR", 0) + counts.get("ARC", 0)) and answer in ("open", "wall"):
-        return False
+        if kind == "corner" and answer != "wall":
+            return f"모서리에 기둥이 {counts['COLUMN']}개 있어 막힌 자리인데 벽이 아니라고 했습니다."
+        return None
+    doors, arcs = counts.get("DOOR", 0), counts.get("ARC", 0)
+    if (doors + arcs) and answer in ("open", "wall"):
+        found = " · ".join(text for text, n in ((f"문선 {doors}개", doors), (f"원호 {arcs}개", arcs)) if n)
+        return f"상자 안에 {found}가 있어 문 표시가 있는 자리인데 {'열린 통로라고' if answer == 'open' else '벽이라고'} 했습니다."
     if counts.get("WINDOW") and answer == "wall":
-        return False
+        return f"상자 안에 창선 {counts['WINDOW']}개가 있어 창 표시가 있는 자리인데 벽이라고 했습니다."
     if not any(v for k, v in counts.items() if k not in ("GRID", "DIM")) and answer in ("door", "window"):
-        return False
-    return True
+        return f"상자 안에 축선·치수 말고는 아무 선도 없는데 {'문' if answer == 'door' else '창'}이라고 했습니다."
+    return None
+
+
+def consistent(answer: str, counts: dict[str, int], kind: str = "opening") -> bool:
+    """답이 도면 데이터와 정면으로 어긋나면 적용하지 않는다(대기 목록에 남긴다). 이유는 conflict가 준다."""
+    return conflict(answer, counts, kind) is None
 
 
 _QUESTION = """건축 평면도 조각입니다. 빨간 상자는 벽선이 끊긴 자리(폭 {width:.0f}mm)이고, 규칙은 여기에 문이나 창 표시를 찾지 못했습니다.
@@ -440,6 +449,24 @@ def save_decisions(directory: Path, decisions: dict[str, dict[str, Any]]) -> Non
     (directory / DECISIONS).write_text(json.dumps({"decisions": dict(sorted(merged.items()))}, ensure_ascii=False, indent=1), encoding="utf-8")
 
 
+REJECTED = "rejected.json"  # LLM이 답했지만 도면 근거와 어긋나 적용하지 않은 답. 화면에서 '걸러짐'으로 보여 준다
+
+
+def load_rejected(directory: Path) -> dict[str, dict[str, Any]]:
+    path = Path(directory) / REJECTED
+    if not path.is_file():
+        return {}
+    return dict(json.loads(path.read_text(encoding="utf-8")).get("rejected", {}))
+
+
+def save_rejected(directory: Path, rejected: dict[str, dict[str, Any]], accepted: set[str] | frozenset[str] = frozenset()) -> None:
+    """걸러진 답을 더해 쓴다. 그 뒤 받아들인 답이 생긴 지점(accepted)은 지운다."""
+    directory = Path(directory)
+    directory.mkdir(parents=True, exist_ok=True)
+    merged = {k: v for k, v in (load_rejected(directory) | rejected).items() if k not in accepted}
+    (directory / REJECTED).write_text(json.dumps({"rejected": dict(sorted(merged.items()))}, ensure_ascii=False, indent=1), encoding="utf-8")
+
+
 EVIDENCE = "evidence.json"
 _TEXT_REACH_MM = 4000.0  # 이 거리 안의 글자를 근거로 준다
 
@@ -615,6 +642,7 @@ def ask_llm(spots: list[Spot], images: dict[str, Path], provider: str, model: st
     questions = {"outline": _OUTLINE_QUESTION, "corner": _CORNER_QUESTION, "window": _WINDOW_QUESTION}
     answers: dict[str, dict[str, Any]] = {}
     unsaved: dict[str, dict[str, Any]] = {}
+    rejected: dict[str, dict[str, Any]] = {}
     for sp in spots:
         if sp.key not in images:
             continue
@@ -625,14 +653,20 @@ def ask_llm(spots: list[Spot], images: dict[str, Path], provider: str, model: st
         except QuotaExhausted:
             break
         reply = extract_json(text)
-        if isinstance(reply, dict) and reply.get("answer") in ANSWERS and consistent(reply["answer"], info.get("counts") or {}, sp.kind):
+        if isinstance(reply, dict) and reply.get("answer") in ANSWERS:
             answer = {"answer": reply["answer"], "reason": str(reply.get("reason", ""))[:200], "model": f"{provider}:{model}"}
-            answers[sp.key] = unsaved[sp.key] = answer
+            why = conflict(reply["answer"], info.get("counts") or {}, sp.kind)
+            if why is None:
+                answers[sp.key] = unsaved[sp.key] = answer
+            else:  # 적용하지 않는다. 무엇을 왜 걸렀는지는 남겨 사람이 볼 수 있게 한다
+                rejected[sp.key] = {**answer, "why": why}
         if directory is not None and len(unsaved) >= 10:
             save_decisions(directory, unsaved)
             unsaved = {}
     if directory is not None and unsaved:
         save_decisions(directory, unsaved)
+    if directory is not None and (rejected or answers):
+        save_rejected(directory, rejected, set(answers))
     return answers
 
 
@@ -722,6 +756,7 @@ def _write_items(directory: Path, spots: list[Spot], decisions: dict[str, dict[s
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(json.dumps(evidence, ensure_ascii=False, indent=1), encoding="utf-8")
     items = []
+    rejected = load_rejected(directory)
     for sp in spots:
         proof = evidence.get(sp.key) or {}
         image = directory / "spots" / _image_name(sp)
@@ -732,6 +767,8 @@ def _write_items(directory: Path, spots: list[Spot], decisions: dict[str, dict[s
             "image": f"spots/{image.name}" if image.is_file() else None,
             "evidence": {"counts": proof.get("counts") or {}, "sides": proof.get("sides") or [], "text": proof.get("text", "")},
             "decision": decisions.get(sp.key),
+            # LLM이 답했지만 도면 근거와 어긋나 적용하지 않은 답과 그 이유. LLM 답이 적용된 지점에는 없다
+            "rejected": None if (decisions.get(sp.key) or {}).get("model", "user") != "user" else rejected.get(sp.key),
         })
     (directory / ITEMS).write_text(json.dumps({"answers": list(ANSWERS), "items": items}, ensure_ascii=False, indent=1), encoding="utf-8")
 

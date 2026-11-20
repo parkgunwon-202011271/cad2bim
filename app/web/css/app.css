@@ -198,6 +198,9 @@ body {
 .c-review__chip { flex-shrink: 0; padding: 2px 8px; border-radius: var(--radius-lg); background: var(--color-bg-subtle); color: var(--color-text-secondary); font-size: var(--font-size-xs); font-weight: var(--font-weight-bold); white-space: nowrap; }
 .c-review__chip--ai { background: var(--color-accent-subtle); color: var(--color-accent-default); }
 .c-review__chip--user { background: var(--color-status-success-subtle); color: var(--color-status-success); }
+.c-review__chip--rejected { background: var(--color-status-warning-subtle); color: var(--color-status-warning); }
+.c-review-card__rejected { display: flex; flex-direction: column; gap: var(--space-1); padding: var(--space-2) var(--space-3); border-left: 3px solid var(--color-status-warning); border-radius: var(--radius-sm); background: var(--color-status-warning-subtle); }
+.c-review-card__rejected p { margin: 0; }
 .c-review__apply { display: flex; align-items: center; justify-content: space-between; gap: var(--space-2); padding: var(--space-2) var(--space-3); border-radius: var(--radius-sm); background: var(--color-status-warning-subtle); font-size: var(--font-size-xs); font-weight: var(--font-weight-bold); }
 .c-review__apply .c-button { flex-shrink: 0; white-space: nowrap; }
 .c-review__row--dirty .c-review__chip { outline: 2px solid var(--color-status-warning); outline-offset: 1px; }

@@ -149,6 +149,13 @@
     rows[0].click();
     const card = doc.querySelector('.c-review-card');
     assert(!card.hidden && card.querySelector('img') && rows[0].getAttribute('aria-pressed') === 'true' && caption.textContent.includes('단면'), '지점을 누르면 도면 조각이 든 상세 카드와 그 층 단면을 보여야 합니다');
+    // AI가 답했지만 도면 근거와 어긋나 걸러진 지점: 답과 걸러진 이유를 보여 준다.
+    const filteredRow = [...rows].find((row) => row.querySelector('.c-review__chip--rejected'));
+    if (filteredRow) {
+      filteredRow.click();
+      const note = card.querySelector('.c-review-card__rejected');
+      assert(note?.textContent.includes('AI의 답') && note.textContent.includes('걸러진 이유') && card.textContent.includes('AI 답 걸러짐'), '걸러진 AI 답과 걸러진 이유를 보여야 합니다');
+    }
     // 사람의 확인·수정: AI 답이 있는 지점을 골라 확인하고, 다른 답으로 고치고, 적용하고, 되돌린다.
     const aiRow = [...rows].find((row) => row.querySelector('.c-review__chip--ai'));
     if (aiRow) {

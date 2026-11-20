@@ -28,6 +28,8 @@ export function reviewDirty(item) {
 }
 const STATE_LABEL = { pending: '대기', ai: 'AI 판단', user: '사람 확인' };
 const answerLabel = (answer) => ANSWER_LABEL[answer] || answer;
+// '문'이라고 / '열린 통로'라고: 받침이 있으면 '이라고'를 붙인다.
+const quoted = (text) => `'${text}'${(text.charCodeAt(text.length - 1) - 0xac00) % 28 > 0 ? '이라고' : '라고'}`;
 const meters = (mm) => `${(mm / 1000).toFixed(mm < 10000 ? 1 : 0)}m`;
 const chip = (state, text) => h('span', { class: `c-review__chip c-review__chip--${state}` }, text);
 
@@ -49,11 +51,13 @@ export function ReviewList({ floorLabel, onSelect, onApply }) {
     const counts = { pending: 0, ai: 0, user: 0 };
     items.forEach((item) => { counts[reviewState(item)] += 1; });
     const dirty = items.filter(reviewDirty).length;
+    const filtered = items.filter((item) => !item.decision && item.rejected).length; // AI가 답했지만 근거와 어긋나 적용하지 않은 곳
     summary.replaceChildren(
       h('p', { class: 'c-panel__hint' }, '규칙이 판단하지 못한 곳입니다. 항목을 누르면 도면 조각과 3D 위치를 보여 줍니다.'),
       h('div', { class: 'c-review__counts' },
         h('span', {}, `전체 ${items.length}`), chip('ai', `AI 판단 ${counts.ai}`),
-        chip('user', `사람 확인 ${counts.user}`), chip('pending', `대기 ${counts.pending}`)),
+        chip('user', `사람 확인 ${counts.user}`), chip('pending', `대기 ${counts.pending}`),
+        filtered > 0 && chip('rejected', `그중 걸러짐 ${filtered}`)),
       // 답은 고르는 즉시 저장되고, 3D 모델에는 다시 만들 때 반영된다.
       dirty > 0 && h('div', { class: 'c-review__apply' },
         h('span', {}, `3D에 반영 안 된 변경 ${dirty}건`),
@@ -72,8 +76,10 @@ export function ReviewList({ floorLabel, onSelect, onApply }) {
           },
           h('span', { class: `c-review__dot c-review__dot--${state}`, title: STATE_LABEL[state] }),
           h('span', { class: 'c-review__name' }, `${KIND_LABEL[item.kind] || item.kind} · ${meters(item.width)}`),
-          chip(state, item.decision ? answerLabel(item.decision.answer) : '대기'));
+          item.decision ? chip(state, answerLabel(item.decision.answer))
+            : item.rejected ? chip('rejected', '걸러짐') : chip(state, '대기'));
           if (reviewDirty(item)) row.title = '바꾼 답이 아직 3D에 반영되지 않았습니다';
+          else if (!item.decision && item.rejected) row.title = 'AI의 답이 도면 근거와 어긋나 적용하지 않았습니다';
           rows.set(item.key, row);
           return row;
         }),
@@ -107,6 +113,7 @@ export function ReviewCard({ floorLabel, onClose, onDecide }) {
     const state = reviewState(item);
     const decision = item.decision;
     const ai = state === 'ai' ? decision : decision?.ai; // 사람이 정한 뒤에도 AI가 골랐던 답을 보여 준다
+    const rejected = item.rejected; // AI가 답했지만 도면 근거와 어긋나 적용하지 않은 답
     const counts = Object.entries(item.evidence?.counts || {}).sort((a, b) => b[1] - a[1])
       .map(([role, n]) => `${ROLE_LABEL[role] || role} ${n}`);
     const sides = item.evidence?.sides || [];
@@ -120,14 +127,22 @@ export function ReviewCard({ floorLabel, onClose, onDecide }) {
         ? h('img', { class: 'c-review-card__image', src: item.image, alt: '원본 도면 조각. 빨간 상자가 검토 지점입니다.' })
         : h('div', { class: 'c-review-card__image c-review-card__image--none' }, '도면 조각 없음'),
       h('section', { class: `c-review-card__verdict c-review-card__verdict--${state}` },
-        h('div', { class: 'c-review-card__verdict-head' }, chip(state, STATE_LABEL[state]),
-          h('strong', {}, decision ? answerLabel(decision.answer) : '아직 답이 없습니다')),
+        h('div', { class: 'c-review-card__verdict-head' },
+          state === 'pending' && rejected ? chip('rejected', 'AI 답 걸러짐') : chip(state, STATE_LABEL[state]),
+          h('strong', {}, decision ? answerLabel(decision.answer) : rejected ? '적용하지 않음' : '아직 답이 없습니다')),
         state === 'ai' && [decision.reason && h('p', {}, decision.reason), h('small', {}, decision.model)],
         state === 'user' && h('p', {}, ai
-          ? (ai.answer === decision.answer ? 'AI의 답을 사람이 확인했습니다.' : `AI는 '${answerLabel(ai.answer)}'(이)라고 했고, 사람이 고쳤습니다.`)
+          ? (ai.answer === decision.answer ? 'AI의 답을 사람이 확인했습니다.' : `AI는 ${quoted(answerLabel(ai.answer))} 했고, 사람이 고쳤습니다.`)
           : 'AI 답 없이 사람이 정했습니다.'),
         state === 'user' && ai?.reason && h('small', {}, `AI의 이유: ${ai.reason}`),
-        state === 'pending' && h('p', {}, 'AI가 답하지 못했거나 답이 도면 근거와 어긋나 걸러진 곳입니다. 아래에서 직접 고를 수 있습니다. 그동안은 규칙 결과를 그대로 씁니다.'),
+        state === 'pending' && !rejected && h('p', {}, 'AI의 답을 아직 받지 못한 곳입니다. 아래에서 직접 고를 수 있습니다. 그동안은 규칙 결과를 그대로 씁니다.'),
+        state === 'pending' && rejected && h('p', {}, '아래에서 직접 고를 수 있습니다. 그동안은 규칙 결과를 그대로 씁니다.'),
+        // 판단은 AI가, 거르기는 계산으로: AI의 답이 도면 데이터와 정면으로 어긋나면 적용하지 않고 이유를 보여 준다.
+        state !== 'ai' && rejected && h('div', { class: 'c-review-card__rejected' },
+          h('strong', {}, `AI의 답: ${answerLabel(rejected.answer)}`),
+          rejected.reason && h('p', {}, `AI의 이유: ${rejected.reason}`),
+          h('p', {}, `걸러진 이유: ${rejected.why}`),
+          h('small', {}, rejected.model)),
         reviewDirty(item) && h('p', { class: 'c-review-card__dirty' }, "아직 3D에 반영되지 않았습니다. 목록 위의 '변경 적용'을 누르면 다시 만듭니다.")),
       h('section', { class: 'c-review-card__decide' },
         h('h4', {}, state === 'ai' ? '확인하거나 고치기' : '답 고르기'),
