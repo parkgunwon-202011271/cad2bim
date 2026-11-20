@@ -42,7 +42,7 @@ ODA File Converter는 비회원이면 비상업 용도만 허용되므로 쓰지
 git pull
 .venv\Scripts\activate
 pip install -r requirements.txt
-python scripts\verify.py              # 마지막 줄 "재현 성공" 확인 (벽 101, 기둥 61, 문 37, 창 34, 실 38, 3D 해시 3bf27045e0f4a14e)
+python scripts\verify.py              # 마지막 줄 "재현 성공" 확인 (벽 101, 기둥 61, 문 39, 창 34, 실 38, 3D 해시 c2f40953dd1fe2bd)
 python -m app data\public\주민센터    # 앱을 열면서 주민센터 결과를 바로 보여 줌
 ```
 

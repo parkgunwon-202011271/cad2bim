@@ -15,9 +15,10 @@
 - 지표: 정확도, 4종 F1과 그 평균(평균 F1).
 
 ```
-cd core && set CAD2BIM_LLM=ml && python -m cad2bim.cli build "..\data\public\주민센터"   # 근거(evidence.json) 생성
-cd .. && python eval/judgment_eval.py                                                      # → results/judgment.json
+python eval/judgment_eval.py      # → results/judgment.json
 ```
+근거는 평가 당시 LLM에 준 것을 `jumin_evidence.json`에 저장해 두었다. 도면을 새로 인식하면 지점 위치가 조금 달라져
+같은 24곳이 나오지 않으므로, 이 파일로 판정만 다시 한다.
 
 `judgment_eval.py`는 합성 시험 지점 378곳(학습에 안 쓴 다른 합성 30동)의 판정 F1도 함께 낸다.
 

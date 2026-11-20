@@ -3,7 +3,7 @@
 사용: python eval/judgment_eval.py
 A. 합성: feat2(시드 1000~1099)로 학습한 모델을 다른 합성 30동(feat_S*)에서 평가 (규칙 대용 기준선 포함)
 B. 주민센터 24곳: 우리 모델과 LLM 답(eval/results/llm_answers_jumin.txt)을 검토자 정답과 비교
-   근거(evidence.json)는 주민센터를 CAD2BIM_LLM=ml 로 한 번 변환하면 생긴다(README 참고).
+   근거는 평가 당시 LLM에 준 것을 eval/jumin_evidence.json 에 저장해 두었다(새로 인식하면 지점이 조금 달라진다).
 """
 import ast, glob, json, re, sys
 from pathlib import Path
@@ -39,7 +39,7 @@ syn = RandomForestClassifier(n_estimators=400, min_samples_leaf=2, class_weight=
 print("A. 합성 시험 지점", len(test))
 res = {"synthetic": {"rule": report("규칙(기준선)", yt, [rule(r) for r in test]), "ml": report("우리 ML", yt, syn.predict(X(test)))}}
 meta = json.load(open(R / "eval" / "jumin_spots.json", encoding="utf-8"))
-ev = json.load(open(R / "data/public/주민센터/_cad2bim_out/_llm/spots/evidence.json", encoding="utf-8"))
+ev = json.load(open(R / "eval" / "jumin_evidence.json", encoding="utf-8"))  # LLM에 준 것과 같은 근거(평가 당시 저장)
 truth = "open door door door open open open door open open door open open open open open open window window window door wall wall wall".split()
 jumin = [{"kind": x["kind"], "width": x["width"], "thickness": 200.0, **(ev.get(x["key"]) or {"counts": {}})} for x in meta]
 model = joblib.load(R / "models" / "spot_model.joblib")
