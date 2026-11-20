@@ -30,6 +30,10 @@ _PERPENDICULAR = math.sin(math.radians(8.0))
 _OBLIQUE = (math.cos(math.radians(80.0)), math.cos(math.radians(10.0)))  # 상자의 변에서 10도 넘게 기운 선
 _RECT_SHARE = 0.95  # 최소 사각형의 이만큼을 채우면 사각형이다
 _BAND_MAX_MM = 200.0  # 가장자리 띠(등받이, 조리대 앞턱)의 최대 두께
+_PANEL_MM = (25.0, 100.0)  # 선 두 줄로 그린 칸막이의 두께
+_NEAR_MM = 100.0
+_STALL_REACH_MM = 1200.0  # 변기에서 이 거리 안의 칸막이는 화장실 칸막이다
+_STALL_MAX_MM = 2000.0
 _BACK_MM = (40.0, 130.0)  # 등받이로 보는 띠 두께. 이보다 얇으면 조리대 뒤턱, 두꺼우면 앞턱·선반이다
 _ADJACENT_MM = 20.0
 # 위생기구 레이어 이름. 같은 FURNITURE 역할이라도 높이와 모양이 다르다.
@@ -371,10 +375,43 @@ def _attach_tanks(items: list[Item], gone: set[int]) -> None:
                 break
 
 
+def _strip_hosts(strip: Polygon, i: int, items: list[Item], alive: list[int], tree: Any) -> list[int]:
+    """얇은 띠가 한 변을 다 덮으며 맞닿은 가구들."""
+    sf = frame_of(strip)
+    hosts = []
+    for n in tree.query(strip.buffer(_TOUCH_MM)).tolist():
+        j = alive[n]
+        host = items[j]
+        if j == i or host.tank is not None:
+            continue
+        if host.polygon.distance(strip) > _TOUCH_MM or rect_share(host.polygon) < 0.9:
+            continue
+        hf = frame_of(host.polygon)
+        if hf.depth < 300.0 or hf.depth > 1100.0:
+            continue
+        # 띠의 긴 변과 나란한 가구의 변 길이가 띠와 같아야 한다(가구 한 변을 다 덮는 띠).
+        along = abs(sf.u[0] * hf.u[0] + sf.u[1] * hf.u[1])
+        side = hf.length if along > 0.9 else hf.depth if along < 0.1 else None
+        if side is None or not 0.9 <= sf.length / side <= 1.1:
+            continue
+        # 붙인 뒤에도 두 조각을 합친 크기여야 한다(어긋나게 닿은 띠는 붙이지 않는다).
+        if _joined(host.polygon, strip) is None:
+            continue
+        hosts.append(j)
+    return hosts
+
+
+def _joined(host: Polygon, strip: Polygon) -> Polygon | None:
+    merged = host.union(strip).convex_hull.minimum_rotated_rectangle
+    return merged if isinstance(merged, Polygon) and merged.area <= (host.area + strip.area) * 1.05 else None
+
+
 def attach_parts(items: list[Item]) -> list[Item]:
     """얇은 띠를 맞닿은 가구에 붙이고(등받이·앞턱), 물탱크를 변기 볼에 붙인다. 붙은 조각은 목록에서 빠진다.
 
-    띠가 여러 겹이면(등받이 두 줄) 안쪽부터 차례로 붙는다. 띠가 가장 두껍게 붙은 쪽이 등받이 쪽이다.
+    띠가 여러 겹이면(등받이 두 줄) 안쪽부터 한 바퀴에 한 겹씩 붙는다. 띠가 가장 두껍게 붙은 쪽이 등받이 쪽이다.
+    두 가구 사이에 낀 띠는, 한쪽 가구에 제 띠가 따로 있으면 다른 쪽의 것이다(앞뒤로 줄지어 놓은 의자).
+    어느 쪽 것인지 가릴 수 없으면 붙이지 않는다(두 가구 사이의 틈).
     """
     if not items:
         return items
@@ -384,8 +421,10 @@ def attach_parts(items: list[Item]) -> list[Item]:
     changed = True
     while changed:
         changed = False
+        # 한 바퀴 동안은 바퀴를 시작할 때의 모양으로 이웃을 찾는다. 방금 붙어 커진 가구가 옆 가구의 띠까지 가져가지 않게 한다.
         alive = [k for k in range(len(items)) if k not in gone]
         tree = shapely.STRtree([items[k].polygon for k in alive])
+        wanted: dict[int, list[int]] = {}
         for i in order:
             strip = items[i]
             if i in gone or strip.tank is not None or strip.edges:
@@ -393,37 +432,47 @@ def attach_parts(items: list[Item]) -> list[Item]:
             sf = frame_of(strip.polygon)
             if sf.depth > _BAND_MAX_MM or sf.length < 300.0 or rect_share(strip.polygon) < 0.9:
                 continue
-            best = None
-            for n in tree.query(strip.polygon.buffer(_TOUCH_MM)).tolist():
-                j = alive[n]
-                host = items[j]
-                if j == i or j in gone or host.tank is not None:
-                    continue
-                if host.polygon.distance(strip.polygon) > _TOUCH_MM or rect_share(host.polygon) < 0.9:
-                    continue
-                hf = frame_of(host.polygon)
-                if hf.depth < 300.0 or hf.depth > 1100.0:
-                    continue
-                # 띠의 긴 변과 나란한 가구의 변 길이가 띠와 같아야 한다(가구 한 변을 다 덮는 띠).
-                along = abs(sf.u[0] * hf.u[0] + sf.u[1] * hf.u[1])
-                side = hf.length if along > 0.9 else hf.depth if along < 0.1 else None
-                if side is None or not 0.9 <= sf.length / side <= 1.1:
-                    continue
-                merged = host.polygon.union(strip.polygon).convex_hull.minimum_rotated_rectangle
-                # 붙인 뒤에도 두 조각을 합친 크기여야 한다(어긋나게 닿은 띠는 붙이지 않는다).
-                if not isinstance(merged, Polygon) or merged.area > (host.polygon.area + strip.polygon.area) * 1.05:
-                    continue
-                if best is None or host.polygon.area > best[0]:
-                    best = (host.polygon.area, j, merged)
-            if best is None:
+            hosts = _strip_hosts(strip.polygon, i, items, alive, tree)
+            if hosts:
+                wanted[i] = hosts
+        # 갈 곳이 하나뿐인 띠부터 정한다. 제 띠를 얻은 가구는 다른 띠의 후보에서 빠진다.
+        served: set[int] = set()
+        settling = True
+        while settling:
+            settling = False
+            for hosts in wanted.values():
+                if len(hosts) == 1 and hosts[0] not in served:
+                    served.add(hosts[0])
+                    settling = True
+            for i, hosts in wanted.items():
+                rest = [j for j in hosts if j not in served]
+                if len(hosts) > 1 and rest and len(rest) < len(hosts):
+                    wanted[i] = rest
+                    settling = True
+        for i, hosts in wanted.items():
+            strip = items[i]
+            sf = frame_of(strip.polygon)
+
+            def toward(host: Item) -> tuple[float, float]:
+                """가구 중심에서 띠 쪽을 보는 방향. 띠는 가구의 한 변에 나란히 붙으므로 띠의 짧은 변 방향이다."""
+                hc, sc = host.polygon.centroid, strip.polygon.centroid
+                sign = 1.0 if (sc.x - hc.x) * sf.v[0] + (sc.y - hc.y) * sf.v[1] >= 0 else -1.0
+                return sf.v[0] * sign, sf.v[1] * sign
+
+            if len(hosts) == 2 and _BACK_MM[0] <= sf.depth <= _BACK_MM[1] and all(items[j].frame.length <= 800.0 for j in hosts):
+                # 등을 맞댄 두 의자가 등받이 띠 하나를 함께 쓴다. 띠는 한 의자에 붙이고 다른 의자는 등받이 쪽만 적어 둔다.
+                other = items[hosts[1]]
+                if not other.edges:
+                    other.edges.append((toward(other), 0.0))
+                hosts = hosts[:1]
+            if len(hosts) != 1:
                 continue
-            host = items[best[1]]
-            hc, sc = host.polygon.centroid, strip.polygon.centroid
-            dx, dy = sc.x - hc.x, sc.y - hc.y
-            # 띠는 가구의 한 변에 나란히 붙는다. 방향은 띠의 짧은 변 방향이다.
-            sign = 1.0 if dx * sf.v[0] + dy * sf.v[1] >= 0 else -1.0
-            host.edges.append(((sf.v[0] * sign, sf.v[1] * sign), sf.depth))
-            host.polygon = best[2]
+            host = items[hosts[0]]
+            merged = _joined(host.polygon, strip.polygon)
+            if merged is None:
+                continue
+            host.edges.append((toward(host), sf.depth))
+            host.polygon = merged
             host.details += strip.details
             host.slashes += strip.slashes
             host.drawn = host.drawn or strip.drawn
@@ -681,7 +730,33 @@ def classify(
     for item in items:
         if item.kind == "stool" and item.rule is None and any(o.polygon.distance(item.polygon) <= _ADJACENT_MM and o.frame.length >= 1500.0 for o in solid):
             item.kind = "bar_stool"
+    # 홀로 선 얇은 면은 칸막이다. 선 두 줄로 그린 가벽(변기 사이 칸막이)은 닫힌 도형이 아니라 위에서 종류를 얻지 못했다.
+    # 양옆이 가구에 붙은 얇은 면은 가구 사이의 틈이므로 그대로 버린다.
+    kept = [item for item in items if item.kind not in ("", "skip")]
+    kept_tree = shapely.STRtree([item.polygon for item in kept]) if kept else None
+    for item in items:
+        f = item.frame
+        if item.kind != "" or item.drawn or not _PANEL_MM[0] <= f.depth < _PANEL_MM[1] or f.length < 600.0 or rect_share(item.polygon) < 0.9:
+            continue
+        if all(_covered(f, sign, kept, kept_tree) < 0.3 for sign in (-1.0, 1.0)):
+            item.kind, item.how = "partition", "size"
+    # 변기 곁의 칸막이는 화장실 칸막이다(바닥에서 띄운 높은 판).
+    toilets = [item for item in items if item.kind == "toilet"]
+    for item in items:
+        # 화장실 칸막이와 문짝은 2m를 넘지 않는다. 벽 너머 옆방의 긴 판(화이트보드)까지 바꾸지 않게 길이를 본다.
+        if item.kind != "partition" or item.rule is not None or item.frame.length > _STALL_MAX_MM:
+            continue
+        if any(t.footprint.distance(item.polygon) <= _STALL_REACH_MM for t in toilets):
+            item.kind = "stall"
     return [item for item in items if item.kind not in ("", "skip")]
+
+
+def _covered(frame: Frame, sign: float, others: list[Item], tree: Any) -> float:
+    """얇은 면의 한쪽 긴 변 바깥 100mm 띠가 다른 가구로 덮인 비율. 가구에 바짝 붙은 선(조리대 앞 손잡이 선)을 가려낸다."""
+    if tree is None:
+        return 0.0
+    probe = frame.rect(frame.length * 0.9, _NEAR_MM, 0.0, sign * (frame.depth / 2 + 5.0 + _NEAR_MM / 2))
+    return sum(others[j].polygon.intersection(probe).area for j in tree.query(probe).tolist()) / probe.area
 
 
 def face_tables(items: list[Item], reach: float = 900.0) -> None:
