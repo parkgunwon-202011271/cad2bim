@@ -150,9 +150,19 @@ def load_review(out_dir: Path) -> dict:
         image = Path(out_dir) / "_llm" / item["image"] if item.get("image") else None
         items.append({
             **item, "image": image if image is not None and image.is_file() else None,
-            "applied": (item.get("decision") or {}).get("answer"), "decision": current.get(item["key"]),
+            "applied": (item.get("decision") or {}).get("answer"),
+            "decision": current.get(item["key"]) or _ml_answer(item),
         })
     return {"answers": data.get("answers", []), "items": items}
+
+
+def _ml_answer(item: dict) -> dict | None:
+    """ML 판정 모델의 답(CAD2BIM_LLM=ml). 빌드마다 다시 계산해 decisions.json에 저장하지 않으므로 마지막 빌드의 답을 쓴다."""
+    decision = item.get("decision") or {}
+    return decision if str(decision.get("model", "")).startswith(_ML_PREFIX) else None
+
+
+_ML_PREFIX = "ml:"
 
 
 def _read_decisions(out_dir: Path) -> dict:
@@ -175,10 +185,12 @@ def set_review_decision(out_dir: Path, key: str, answer: str | None) -> dict | N
     if answer is not None and answer not in review["answers"]:
         raise ValueError("고를 수 없는 답입니다.")
     decisions = _read_decisions(out_dir)
-    now = decisions.get(key)
+    item = next(item for item in review["items"] if item["key"] == key)
+    now = decisions.get(key) or item["decision"]  # 저장된 답이 없으면 ML 답(빌드마다 계산)
     ai = now.get("ai") if now and now.get("model") == "user" else now
     if answer is None:
-        entry = ai
+        # AI 답으로 되돌린다. ML 답은 저장하지 않고 지운다. 다음 빌드가 모델로 다시 계산한다.
+        entry = None if ai is None or str(ai.get("model", "")).startswith(_ML_PREFIX) else ai
     else:
         entry = {"answer": answer, "reason": "", "model": "user"}
         if ai:
@@ -187,6 +199,7 @@ def set_review_decision(out_dir: Path, key: str, answer: str | None) -> dict | N
         decisions[key] = entry
     else:
         decisions.pop(key, None)
+        entry = ai if answer is None and ai is not None else None
     directory = Path(out_dir) / "_llm"
     directory.mkdir(parents=True, exist_ok=True)
     (directory / "decisions.json").write_text(

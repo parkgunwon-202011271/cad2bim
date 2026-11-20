@@ -108,6 +108,24 @@ class JobHandoffTests(unittest.TestCase):
             with self.assertRaises(ValueError):
                 jobs.set_review_decision(out, *bad)
 
+    def test_ml_answers_show_as_ai_answers_and_undo_goes_back_to_the_model(self):
+        """CAD2BIM_LLM=ml: 모델 답은 decisions.json에 없고 review.json에만 있다. 화면에는 AI 답으로, 되돌리면 모델 답으로."""
+        import json
+        out = self.root / jobs.OUT_DIR_NAME
+        (out / '_llm').mkdir(parents=True)
+        ml = {'answer': 'door', 'reason': 'ML p=0.81', 'model': 'ml:spot_model.joblib'}
+        (out / '_llm' / 'review.json').write_text(json.dumps({'answers': ['wall', 'door', 'open'], 'items': [
+            {'key': 'k1', 'image': None, 'decision': ml},
+        ]}), encoding='utf-8')
+        item, = jobs.load_review(out)['items']
+        self.assertEqual((item['applied'], item['decision']), ('door', ml))  # 대기도, 반영 안 된 변경도 아니다
+        changed = jobs.set_review_decision(out, 'k1', 'wall')
+        self.assertEqual((changed['model'], changed['ai']), ('user', ml))  # 사람이 고쳐도 모델 답을 남긴다
+        self.assertEqual(jobs.set_review_decision(out, 'k1', None), ml)  # 되돌리면 모델 답
+        self.assertEqual(json.loads((out / '_llm' / 'decisions.json').read_text(encoding='utf-8')), {'decisions': {}})
+        item, = jobs.load_review(out)['items']
+        self.assertEqual(item['decision'], ml)
+
 
 if __name__ == '__main__':
     unittest.main()
