@@ -3,7 +3,7 @@
 // 키보드: W·S 앞뒤, A·D 옆, Q·E 아래·위, Shift 빠르게. 보는 중심도 함께 움직인다.
 // 바닥 가까이(3m 안)에서는 화각을 70°로 넓힌다. 밖에서는 40°다.
 // 사람 시점(enterPerson): 눈높이 1.6m로 서서 걷는다. 드래그는 고개 돌리기, 벽은 막고 계단은 오른다.
-// 가구: 도면의 가구·위생기구 선을 층 바닥에 그린다(furniture.json).
+// 가구: 도면의 가구·위생기구를 종류별 입체로 세우고(의자 다리·등받이, 탁자 상판 …), 입체로 만들지 못한 선은 층 바닥에 그린다(furniture.json).
 //
 // 표시 스타일
 // - 건축(기본): Revit의 '음영 + 모서리'처럼 차분한 재료색에 모서리 선을 긋는다.
@@ -96,8 +96,21 @@ const FURNITURE_SOLIDS = {
   chair: '#6b7685', table: '#c9ab85', shelf: '#b49b7c', counter: '#e6e2da', fixture: '#f4f4f1', partition: '#d4d1ca',
   appliance: '#8b939d', // 정수기·키오스크·자판기처럼 이름표로 찾은 기기
 };
-// 사람 시점에서 막는 가구. 의자·탁자는 사이로 지나다닐 수 있게 막지 않는다.
-const FURNITURE_BLOCKING = new Set(['shelf', 'counter', 'fixture', 'partition', 'appliance']);
+// 가구 부재의 재질(furniture.json 입체의 m). 재질이 없는 예전 결과는 위의 종류별 색을 쓴다.
+const FURNITURE_MATERIALS = {
+  wood: { color: '#c9ab85', roughness: 0.7 },
+  wood_dark: { color: '#8a6a4b', roughness: 0.7 },
+  metal: { color: '#4a4f57', roughness: 0.45, metalness: 0.6 },
+  steel: { color: '#c3c8cd', roughness: 0.35, metalness: 0.5 },
+  fabric: { color: '#6b7685', roughness: 0.95 },
+  ceramic: { color: '#f4f4f1', roughness: 0.25 },
+  glass: { color: '#bfe3ee', roughness: 0.1, opacity: 0.35 },
+  panel: { color: '#d4d1ca', roughness: 0.85 },
+  top: { color: '#e6e2da', roughness: 0.6 },
+  black: { color: '#2b2d31', roughness: 0.5 },
+};
+// 사람 시점에서 막지 않는 가구. 의자·탁자는 사이로 지나다닐 수 있게 둔다. 나머지는 막는다.
+const FURNITURE_PASSABLE = new Set(['chair', 'table', 'stool']);
 // 엘리베이터(mm). 카 크기는 도면의 승강로 표시를 따르고 높이·문은 흔한 값이다.
 const ELEVATOR_COLOR = '#b8bdc3';
 const ELEVATOR_CAR_MM = 2300; // 카 안 높이
@@ -743,12 +756,19 @@ export class Viewer3D {
     if (!this.model || !data?.floors) return;
     const lineMaterial = new THREE.LineBasicMaterial({ color: FURNITURE_COLOR });
     this.clipped.add(lineMaterial);
-    const solidMaterials = Object.fromEntries(Object.entries(FURNITURE_SOLIDS).map(([kind, color]) => {
-      const m = prepare(new THREE.MeshStandardMaterial({ color, roughness: kind === 'fixture' ? 0.35 : 0.85 }));
-      m.name = `furniture_${kind}`;
-      this.clipped.add(m);
-      return [kind, m];
-    }));
+    // 재질은 쓰이는 것만 만든다. 이름은 'm:재질' 또는 예전 결과의 'k:종류'다.
+    const solidMaterials = new Map();
+    const materialFor = (solid) => {
+      const name = solid.m in FURNITURE_MATERIALS ? `m:${solid.m}` : `k:${solid.k}`;
+      if (!solidMaterials.has(name)) {
+        const spec = FURNITURE_MATERIALS[solid.m] || { color: FURNITURE_SOLIDS[solid.k] || FURNITURE_MATERIALS.panel.color, roughness: solid.k === 'fixture' ? 0.35 : 0.85 };
+        const m = prepare(new THREE.MeshStandardMaterial({ ...spec, transparent: (spec.opacity ?? 1) < 1 }));
+        m.name = `furniture_${solid.m || solid.k}`;
+        this.clipped.add(m);
+        solidMaterials.set(name, m);
+      }
+      return name;
+    };
     for (const [key, floor] of Object.entries(data.floors)) {
       const group = this.groups.get(key);
       if (!group) continue;
@@ -764,27 +784,32 @@ export class Viewer3D {
         lines.raycast = () => {};
         parts.push(lines);
       }
-      // 같은 종류는 한 덩어리로 합친다. 가구가 수백 개라 따로 그리면 느려진다.
-      const byKind = new Map();
+      // 같은 재질은 한 덩어리로 합친다. 부재가 수천 개라 따로 그리면 느려진다. 지나갈 수 있는 가구와 막는 가구는 나눈다.
+      const batches = new Map();
       for (const solid of floor.solids || []) {
-        if (!(solid.k in FURNITURE_SOLIDS) || solid.p.length < 3 || solid.z1 <= solid.z0) continue;
+        if (!solid.p || solid.p.length < 3 || solid.z1 <= solid.z0) continue;
         const shape = new THREE.Shape(solid.p.map(([x, y]) => new THREE.Vector2(x, y)));
+        // 구멍(h): 개수대의 볼, 변기 좌판처럼 뚫린 자리
+        for (const hole of solid.h || []) shape.holes.push(new THREE.Path(hole.map(([x, y]) => new THREE.Vector2(x, y))));
         const geometry = new THREE.ExtrudeGeometry(shape, { depth: solid.z1 - solid.z0, bevelEnabled: false, curveSegments: 1 });
         geometry.translate(0, 0, floor.z + solid.z0);
-        if (!byKind.has(solid.k)) byKind.set(solid.k, []);
-        byKind.get(solid.k).push(geometry);
+        const blocking = !FURNITURE_PASSABLE.has(solid.k);
+        const name = `${materialFor(solid)}|${blocking ? 'block' : 'pass'}`;
+        if (!batches.has(name)) batches.set(name, { material: materialFor(solid), blocking, geometries: [] });
+        batches.get(name).geometries.push(geometry);
       }
-      for (const [kind, geometries] of byKind) {
-        const mesh = new THREE.Mesh(mergeGeometries(geometries), solidMaterials[kind]);
-        mesh.name = `${key}_Furniture_${kind}`;
-        mesh.castShadow = true;
+      for (const [name, batch] of batches) {
+        const material = solidMaterials.get(batch.material);
+        const mesh = new THREE.Mesh(mergeGeometries(batch.geometries), material);
+        mesh.name = `${key}_Furniture_${name}`;
+        mesh.castShadow = !material.transparent; // 유리는 그림자를 드리우지 않는다
         mesh.receiveShadow = true;
         mesh.userData.mats = { arch: mesh.material, class: mesh.material };
         const edges = new THREE.LineSegments(new THREE.EdgesGeometry(mesh.geometry, 25), this.edgeMaterials.building);
         edges.raycast = () => {};
         mesh.add(edges);
         this.meshes.push({ mesh, building: true }); // 단면 칠하기·스타일 바꾸기를 같이 받는다
-        if (FURNITURE_BLOCKING.has(kind)) this.obstacles.push(mesh);
+        if (batch.blocking) this.obstacles.push(mesh);
         parts.push(mesh);
       }
       for (const obj of parts) {
@@ -794,7 +819,7 @@ export class Viewer3D {
         this.furniture.push(obj);
       }
     }
-    for (const m of [lineMaterial, ...Object.values(solidMaterials)]) {
+    for (const m of [lineMaterial, ...solidMaterials.values()]) {
       m.clippingPlanes = this.activeCut() ? [this.cutPlane] : null;
     }
     this.buildElevators(data.elevators || []);

@@ -306,7 +306,7 @@ async function showResult(useSample, took = '') {
     updateModelTitle();
     renderLayers(floors);
     renderInside(floors);
-    renderStats(model.summary, floors.length);
+    renderStats(model.summary, floors.length, countFurniture(model.furniture));
     setReview(await api.getReview(useSample));
     const sourcePlans = model.plans || [];
     const planButtons = sourcePlans.map((plan, i) => h('button', {
@@ -373,8 +373,8 @@ function renderLayers(floors) {
     ToggleList({
       items: [
         { key: 'roof', label: '지붕' }, { key: 'site', label: '대지·조경' },
-        // 도면의 가구·위생기구 선을 바닥에 그린다. 가구가 없는 결과에서는 숨긴다.
-        ...(viewer.hasFurniture() ? [{ key: 'furniture', label: '가구(도면 선)' }] : []),
+        // 도면의 가구·위생기구를 입체로 세운다. 가구가 없는 결과에서는 숨긴다.
+        ...(viewer.hasFurniture() ? [{ key: 'furniture', label: '가구' }] : []),
       ],
       onChange: (key, on) => {
         if (key === 'roof') viewer.setRoofVisible(on);
@@ -401,7 +401,14 @@ function renderInside(floors) {
   insideControls.hidden = false;
 }
 
-function renderStats(summary, floorCount) {
+/** 도면에서 찾아 입체로 세운 가구 수(furniture.json의 items). 가구 목록이 없는 예전 결과는 null. */
+function countFurniture(furniture) {
+  const floors = Object.values(furniture?.floors || {});
+  if (!floors.some((floor) => Array.isArray(floor.items))) return null;
+  return floors.reduce((n, floor) => n + (floor.items?.length || 0), 0);
+}
+
+function renderStats(summary, floorCount, furnitureCount = null) {
   const t = summary?.totals || {};
   const stats = [
     { label: '층', value: floorCount },
@@ -410,6 +417,7 @@ function renderStats(summary, floorCount) {
     { label: '문', value: t.doors ?? '-' },
     { label: '창', value: t.windows ?? '-' },
     { label: '실', value: t.spaces ?? '-' },
+    ...(furnitureCount ? [{ label: '가구', value: furnitureCount }] : []),
   ];
   statsPanel.setChildren(StatList({ stats }));
 }

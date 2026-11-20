@@ -25,6 +25,7 @@ class Primitive:
     circle    {center, radius}
     ellipse   {center, semi_major, semi_minor, points}  points는 평탄화한 호
     text      {position, text, height, rotation, centered}
+    leader    {position, text, height, rotation, centered}  지시선 글자. position은 화살표 끝(가리키는 대상)
     hatch     {rings, pattern, solid}
     dimension {p1, p2, position, measured, value}  value는 렌더링된 표기값(숫자), 없으면 None
     block_ref {position, name, rotation, xscale, yscale}  블록 삽입점. 문·창 블록 인식용
@@ -76,7 +77,7 @@ class Primitive:
             case "arc" | "circle":
                 (cx, cy), r = g["center"], g["radius"]
                 return [(cx - r, cy - r), (cx + r, cy + r)]
-            case "text":
+            case "text" | "leader":
                 return [g["position"]]
             case "hatch":
                 return [p for ring in g["rings"] for p in ring]

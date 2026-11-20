@@ -6,7 +6,6 @@ from shapely.geometry import Point
 from cad2bim.config import load_defaults
 from cad2bim.export.elevator import elevator_data, find_elevators
 from cad2bim.export.floor import plan_floors
-from cad2bim.export.furniture import _label_rule
 from cad2bim.preprocess.primitive import Primitive
 from test_building import EXPORT
 from test_collada import storeys_of
@@ -70,13 +69,20 @@ def test_shafts_that_do_not_line_up_are_not_joined():
 def test_furniture_label_picks_height_or_skips_wall_devices():
     import re
 
-    rules = [(re.compile(r["pattern"], re.IGNORECASE), r) for r in CFG["furniture_labels"]]
-    box = rect(0, 0, 500, 500)
     from shapely.geometry import Polygon
 
-    polygon = Polygon(box.geometry["points"])
-    water = _label_rule(polygon, [(Point(250, 900), "정수기")], rules, CFG["furniture_label_reach_mm"])
-    assert water["kind"] == "appliance" and water["z1"] == 1200
-    assert _label_rule(polygon, [(Point(250, 250), "비상벨")], rules, 900.0)["kind"] == "skip"
-    assert _label_rule(polygon, [(Point(250, 250), "남자화장실")], rules, 900.0) is None  # 실 이름은 가구 이름표가 아니다
-    assert _label_rule(polygon, [(Point(250, 3000), "정수기")], rules, 900.0) is None  # 너무 멀다
+    from cad2bim.export.furniture_items import Item, classify
+    from cad2bim.export.furniture_models import build
+
+    rules = [(re.compile(r["pattern"], re.IGNORECASE), r) for r in CFG["furniture_labels"]]
+    polygon = Polygon(rect(0, 0, 500, 500).geometry["points"])
+
+    def named(point, value):
+        found = classify([Item(polygon, "A-FLOR-FIXT", True)], [(point, value, False)], rules, CFG["furniture_label_reach_mm"])
+        return found[0] if found else None
+
+    water = named(Point(250, 900), "정수기")
+    assert water.kind == "appliance" and max(p["z1"] for p in build(water)) == 1200
+    assert named(Point(250, 250), "비상벨") is None  # 벽에 다는 장치는 만들지 않는다
+    assert named(Point(250, 250), "남자화장실").how == "size"  # 실 이름은 가구 이름표가 아니다
+    assert named(Point(250, 3000), "정수기").how == "size"  # 너무 멀다

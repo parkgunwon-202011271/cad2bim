@@ -16,6 +16,7 @@ from ezdxf import path as ezpath
 from ezdxf.document import Drawing
 from ezdxf.entities import DXFEntity
 from ezdxf.lldxf.const import DXFError
+from ezdxf.tools.text import plain_mtext as ezdxf_plain_mtext
 from ezdxf.xclip import XClip
 from shapely.geometry import LineString, Polygon
 
@@ -340,6 +341,34 @@ class _Extractor:
             },
             ctx,
         )
+
+    def _on_multileader(self, e: DXFEntity, ctx: _Parent) -> None:
+        """지시선 글자. 화살표 끝마다 leader 요소 하나를 만든다. 글자가 가리키는 대상(가구 등)의 이름표로 쓴다.
+
+        글자 자리가 아니라 화살표 끝을 위치로 둔다. kind가 text가 아니므로 실 이름·제목을 찾는 단계는 이 글자를 보지 않는다.
+        """
+        context = getattr(e, "context", None)
+        mtext = getattr(context, "mtext", None)
+        if mtext is None:
+            return
+        text = ezdxf_plain_mtext(mtext.default_content).strip()
+        if not text:
+            return
+        for leader in context.leaders:
+            for line in leader.lines:
+                if not line.vertices:
+                    continue
+                self._add(
+                    "leader",
+                    {
+                        "position": _xy(line.vertices[0]),
+                        "text": text,
+                        "height": float(context.char_height or 0.0),
+                        "rotation": 0.0,
+                        "centered": False,
+                    },
+                    ctx,
+                )
 
     def _on_hatch(self, e: DXFEntity, ctx: _Parent) -> None:
         rings = []

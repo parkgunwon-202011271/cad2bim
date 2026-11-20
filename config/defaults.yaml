@@ -220,23 +220,35 @@ export:
   elevator_max_side_mm: 4000.0
   elevator_label_reach_mm: 300.0
   elevator_door_reach_mm: 1000.0  # 승강로 표시(카 외곽)에서 이 거리 안의 벽 개구부를 승강기 문으로 본다. 카와 벽 사이 틈과 벽 두께 절반을 넘는다
-  # 가구 이름표. 가구 도형 안이나 이 거리 안의 글자로 종류와 높이를 정한다. 없으면 크기로 짐작한다.
+  # 가구 이름표. 가구 도형 안이나 이 거리 안의 글자, 가구를 가리키는 지시선 글자로 종류를 정한다. 없으면 기호와 크기로 가늠한다.
+  # kind는 만들 모양이다(core/src/cad2bim/export/furniture_models.py). z0·z1을 적으면 그 높이를 쓰고, m은 몸통 재질이다.
+  # skip: 만들지 않는다. ignore: 이 글자는 이름표로 쓰지 않는다(여러 가구를 한꺼번에 가리키는 글자).
   furniture_label_reach_mm: 900.0
   furniture_labels:
     - {pattern: "비상벨|emergency", kind: skip}            # 벽에 다는 장치
     - {pattern: "엘리베이터|승강기|^\\s*E\\s*[./]?\\s*V", kind: skip}  # 승강로는 따로 만든다
+    - {pattern: "\\bset\\b|세트", kind: ignore}            # 'SOFA&TABLE SET'처럼 묶음을 가리키는 글자
+    - {pattern: "upper\\s*shelf|상부\\s*(장|선반)", kind: upper}
+    - {pattern: "bar\\s*(chair|stool)|바\\s*(의자|체어)|스툴", kind: bar_stool}
+    - {pattern: "bar\\s*table|바\\s*테이블", kind: bar}
+    - {pattern: "work\\s*table|작업대|조리대", kind: counter, m: steel}
+    - {pattern: "sink|싱크|개수대", kind: sink}
+    - {pattern: "stove|gas\\s*range|레인지|화구", kind: stove}
+    - {pattern: "^\\s*ref\\b\\.?|refrig|냉장|냉동", kind: fridge}
+    - {pattern: "자판기|vending", kind: appliance, z0: 0, z1: 1800}
+    - {pattern: "show\\s*case|쇼케이스|진열", kind: showcase}
+    - {pattern: "counter|카운터", kind: counter, z1: 1000}
     - {pattern: "정수기|water", kind: appliance, z0: 0, z1: 1200}
     - {pattern: "키오스크|kiosk", kind: appliance, z0: 0, z1: 1500}
-    - {pattern: "냉장고|자판기|refrig|vending", kind: appliance, z0: 0, z1: 1800}
     - {pattern: "소화전|소화기|hydrant|extinguish", kind: appliance, z0: 0, z1: 1500}
-    - {pattern: "소변기|urinal", kind: fixture, z0: 350, z1: 1000}  # 벽걸이
-    - {pattern: "대변기|양변기|toilet|w\\.?c", kind: fixture, z0: 0, z1: 400}
-    - {pattern: "세면|lav", kind: counter, z0: 0, z1: 850}
+    - {pattern: "소변기|urinal", kind: urinal, z0: 350, z1: 1000}  # 벽걸이
+    - {pattern: "대변기|양변기|toilet|w\\.?c", kind: toilet}
+    - {pattern: "wash\\s*stand|세면|lav", kind: vanity}
     - {pattern: "^\\s*S\\.?\\s*K|청소|mop", kind: fixture, z0: 0, z1: 600}
-    - {pattern: "신발장|shoe", kind: shelf, z0: 0, z1: 1200}
-    - {pattern: "사물함|락커|locker", kind: shelf, z0: 0, z1: 1800}
-    - {pattern: "책장|서가|book", kind: shelf, z0: 0, z1: 2000}
-    - {pattern: "소파|sofa", kind: chair, z0: 0, z1: 750}
+    - {pattern: "신발장|shoe", kind: cabinet, z1: 1200}
+    - {pattern: "사물함|락커|locker|수납장|캐비닛|cabinet|문서함", kind: cabinet, z1: 1800}
+    - {pattern: "책장|서가|book|shelf|선반", kind: shelf, z1: 1800}
+    - {pattern: "소파|sofa|안마의자", kind: sofa}
   # ㄷ자 계단의 계단참을 계단 범위 밖에 둘 때. 깊이는 끝에서 벽까지이되 이 사이로 맞춘다
   stair_max_riser_mm: 200.0      # 단 높이가 이를 넘으면 평면의 계단을 위로 되풀이한다(층고가 높은 층)
   stair_landing_min_mm: 900.0

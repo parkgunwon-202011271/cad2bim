@@ -788,3 +788,22 @@ def test_rooms_bounded_by_double_wall_lines_are_not_sheet_cells(cfg):
 
     assert line_cells(_cell_sheet(double=True), cfg["regions"]) == ([], set())
     assert line_cells(_cell_sheet(cells=1), cfg["regions"]) == ([], set())  # 칸 하나는 그냥 큰 사각형이다
+
+
+def test_multileader_text_becomes_a_leader_at_the_arrow_tip(make_dxf):
+    """지시선 글자는 화살표 끝 자리의 leader 요소가 된다. 실 이름을 찾는 단계가 보지 않도록 text와 구분한다."""
+    from ezdxf.math import Vec2
+    from ezdxf.render import mleader
+
+    def build(doc, msp):
+        builder = msp.add_multileader_mtext("Standard")
+        builder.set_content("WORK TABLE")
+        builder.add_leader_line(mleader.ConnectionSide.left, [Vec2(1000, 2000)])
+        builder.build(insert=Vec2(3000, 2500))
+
+    prims, stats = extract_primitives(ezdxf.readfile(make_dxf(build)), 1.0)
+    leaders = [p for p in prims if p.kind == "leader"]
+    assert [p.geometry["text"] for p in leaders] == ["WORK TABLE"]
+    assert leaders[0].geometry["position"] == pytest.approx((1000, 2000))
+    assert leaders[0].points() == [leaders[0].geometry["position"]]
+    assert not any(p.kind == "text" for p in prims) and "MULTILEADER" not in stats.unsupported
